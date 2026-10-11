@@ -8,6 +8,7 @@ export const SORTS = {
   oldest: "Oldest",
   priceAsc: "Price: low to high",
   priceDesc: "Price: high to low",
+  deal: "Best deals",
   discount: "Biggest discount",
   name: "Name",
 } as const;
@@ -20,6 +21,7 @@ export interface SearchQuery {
   tags: string[];
   notTags: string[];
   minReviews: number | null;
+  maxReviews: number | null;
   minPct: number | null;
   minPrice: number | null;
   /** Max price in whole currency units. */
@@ -43,6 +45,7 @@ export const DEFAULT_QUERY: SearchQuery = {
   tags: [],
   notTags: [],
   minReviews: null,
+  maxReviews: null,
   minPct: null,
   minPrice: null,
   maxPrice: null,
@@ -77,6 +80,7 @@ export function parseQuery(params: URLSearchParams): SearchQuery {
     tags: list(params.get("tags")),
     notTags: list(params.get("notTags")),
     minReviews: num(params.get("minReviews")),
+    maxReviews: num(params.get("maxReviews")),
     minPct: num(params.get("minPct")),
     minPrice: num(params.get("minPrice")),
     maxPrice: num(params.get("maxPrice")),
@@ -103,7 +107,7 @@ export function serializeQuery(query: SearchQuery): URLSearchParams {
   if (query.q) params.set("q", query.q);
   if (query.tags.length) params.set("tags", query.tags.join(","));
   if (query.notTags.length) params.set("notTags", query.notTags.join(","));
-  for (const key of ["minReviews", "minPct", "minPrice", "maxPrice", "minYear", "maxYear"] as const) {
+  for (const key of ["minReviews", "maxReviews", "minPct", "minPrice", "maxPrice", "minYear", "maxYear"] as const) {
     if (query[key] !== null) params.set(key, String(query[key]));
   }
   if (query.discounted) params.set("discounted", "1");

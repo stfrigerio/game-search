@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import type { GameDetailResponse, PricesResponse } from "../../shared/types.ts";
+import type { GameDetailResponse, GameSummary, PricesResponse } from "../../shared/types.ts";
 import { api } from "../api.ts";
+import { MiniCard } from "./MiniCard.tsx";
+import { SaveButton } from "./SaveButton.tsx";
 import { DECK_LABELS, formatDate, formatPrice, reviewLabel, STORE_NAMES } from "../format.ts";
 
 interface Props {
@@ -8,6 +10,7 @@ interface Props {
   currency: string;
   onClose: () => void;
   onTag: (tag: string) => void;
+  onOpen: (id: string) => void;
 }
 
 const KIND_LABELS = {
@@ -16,18 +19,21 @@ const KIND_LABELS = {
   tracker: "Price trackers",
 } as const;
 
-export function GameDetail({ id, currency, onClose, onTag }: Props) {
+export function GameDetail({ id, currency, onClose, onTag, onOpen }: Props) {
   const [detail, setDetail] = useState<GameDetailResponse | null>(null);
   const [prices, setPrices] = useState<PricesResponse | null>(null);
+  const [similar, setSimilar] = useState<GameSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setDetail(null);
     setPrices(null);
+    setSimilar(null);
     setError(null);
     let live = true;
     api.game(id).then((d) => live && setDetail(d), (e) => live && setError(String(e.message ?? e)));
     api.prices(id).then((p) => live && setPrices(p), () => {});
+    api.similar(id).then((s) => live && setSimilar(s), () => live && setSimilar([]));
     return () => {
       live = false;
     };
@@ -54,7 +60,10 @@ export function GameDetail({ id, currency, onClose, onTag }: Props) {
         ) : (
           <>
             {game.image && <img className="hero" src={game.image} alt="" />}
-            <h2>{game.name}</h2>
+            <div className="detail-title">
+              <h2>{game.name}</h2>
+              <SaveButton id={game.id} large />
+            </div>
             <p className="muted">
               {formatDate(game.releaseDate, game.comingSoon)}
               {game.developers.length > 0 && ` · ${game.developers.join(", ")}`}
@@ -152,6 +161,17 @@ export function GameDetail({ id, currency, onClose, onTag }: Props) {
                     </div>
                   );
                 })}
+              </>
+            )}
+
+            {similar && similar.length > 0 && (
+              <>
+                <h3>Similar games</h3>
+                <div className="similar-grid">
+                  {similar.map((g) => (
+                    <MiniCard key={g.id} game={g} currency={currency} onOpen={() => onOpen(g.id)} />
+                  ))}
+                </div>
               </>
             )}
           </>

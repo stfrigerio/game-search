@@ -89,6 +89,11 @@ export class SearchIndex {
   /** Developer/publisher names are indexed once each; `peopleGames` maps a name back to its games. */
   private readonly people: MiniSearch<{ i: number; name: string }>;
   private readonly peopleGames: number[][] = [];
+  /** Discount weighted by quality: a 50% cut on a great game beats 90% off a bad one. */
+  private readonly dealScores: Float32Array;
+  /** tag id -> indices of games carrying it, and the tag's rank on each, for similar-game lookups. */
+  private readonly tagPostings: Uint32Array[];
+  private readonly tagPostingRanks: Uint8Array[];
   /** Every tag in the catalogue with how many games carry it, most common first. */
   readonly allTags: { tag: string; count: number }[];
 
@@ -104,6 +109,18 @@ export class SearchIndex {
     const counts = new Uint32Array(this.tagNames.length);
     for (const ids of this.gameTags) for (const id of ids) counts[id]++;
     this.allTags = this.tagNames.map((tag, id) => ({ tag, count: counts[id] })).sort((a, b) => b.count - a.count);
+    this.tagPostings = Array.from(counts, (n) => new Uint32Array(n));
+    this.tagPostingRanks = Array.from(counts, (n) => new Uint8Array(n));
+    const fill = new Uint32Array(counts.length);
+    this.gameTags.forEach((ids, i) => {
+      ids.forEach((id, rank) => {
+        this.tagPostingRanks[id][fill[id]] = Math.min(rank, 255);
+        this.tagPostings[id][fill[id]++] = i;
+      });
+    });
+    this.dealScores = Float32Array.from(this.summaries, (s) =>
+      s.bestDiscountPct > 0 && s.reviewCount >= 10 ? s.bestDiscountPct * Math.max(0, s.rating - 50) : 0,
+    );
 
     const searchOptions = { prefix: true, fuzzy: 0.2 };
     this.titles = new MiniSearch({ idField: "i", fields: ["name"], searchOptions });
@@ -169,6 +186,7 @@ export class SearchIndex {
     for (const t of notTags) if (gameTags.includes(t)) return false;
 
     if (q.minReviews !== null && s.reviewCount < q.minReviews) return false;
+    if (q.maxReviews !== null && s.reviewCount > q.maxReviews) return false;
     if (q.minPct !== null && (s.reviewCount === 0 || s.reviewPct < q.minPct)) return false;
     if (q.minPrice !== null && (s.bestPrice === null || s.bestPrice < q.minPrice * 100)) return false;
     if (q.maxPrice !== null && (s.bestPrice === null || s.bestPrice > q.maxPrice * 100)) return false;
@@ -214,6 +232,10 @@ export class SearchIndex {
         return (a, b) => nullsLast(s[a].bestPrice, s[b].bestPrice, -1);
       case "discount":
         return (a, b) => s[b].bestDiscountPct - s[a].bestDiscountPct || s[b].reviewCount - s[a].reviewCount;
+      case "deal": {
+        const score = this.dealScores;
+        return (a, b) => score[b] - score[a] || s[b].reviewCount - s[a].reviewCount;
+      }
       case "name": {
         const n = this.sortNames;
         return (a, b) => (n[a] < n[b] ? -1 : n[a] > n[b] ? 1 : 0);
@@ -221,10 +243,60 @@ export class SearchIndex {
     }
   }
 
-  search(query: SearchQuery, pageSize = PAGE_SIZE): SearchResponse {
+  /**
+   * Games that share the most distinctive tags with `id`, favouring well-rated ones.
+   * Tags are weighted by their rank on each game and by rarity (IDF), so sharing
+   * "Roguelike Deckbuilder" counts far more than sharing "Singleplayer".
+   */
+  similar(id: string, limit = 12): GameSummary[] {
+    const target = this.byId.get(id);
+    if (target === undefined) return [];
+    const n = this.games.length;
+    const scores = new Float32Array(n);
+    const touched: number[] = [];
+    const rankWeight = (rank: number) => 1 / (1 + rank * 0.15);
+    this.gameTags[target].forEach((tag, rank) => {
+      const postings = this.tagPostings[tag];
+      const ranks = this.tagPostingRanks[tag];
+      if (postings.length > n * 0.25) return; // too common to say anything (Indie, Singleplayer, ...)
+      const w = rankWeight(rank) * Math.log(n / postings.length);
+      for (let k = 0; k < postings.length; k++) {
+        const i = postings[k];
+        if (scores[i] === 0) touched.push(i);
+        scores[i] += w * rankWeight(ranks[k]);
+      }
+    });
+    // Keep a small sorted top-k instead of sorting tens of thousands of candidates.
+    const s = this.summaries;
+    const top: { i: number; score: number }[] = [];
+    for (const i of touched) {
+      if (i === target || s[i].reviewCount < 10 || this.games[i].comingSoon) continue;
+      const score = scores[i] * (s[i].rating / 100) ** 2;
+      if (top.length === limit && score <= top[limit - 1].score) continue;
+      let k = top.length;
+      while (k > 0 && top[k - 1].score < score) k--;
+      top.splice(k, 0, { i, score });
+      if (top.length > limit) top.pop();
+    }
+    return top.map((t) => s[t.i]);
+  }
+
+  /** Summaries for the given ids, skipping unknown ones; keeps input order. */
+  summariesFor(ids: string[]): GameSummary[] {
+    return ids.flatMap((id) => {
+      const i = this.byId.get(id);
+      return i === undefined ? [] : [this.summaries[i]];
+    });
+  }
+
+  search(query: SearchQuery, pageSize = PAGE_SIZE, onlyIds?: string[]): SearchResponse {
     const started = performance.now();
     const q = query.q.trim();
-    const candidates = q ? this.textMatches(q) : this.games.map((_, i) => i);
+    let candidates = q ? this.textMatches(q) : this.games.map((_, i) => i);
+    if (onlyIds) {
+      const allowed = new Set(onlyIds.map((id) => this.byId.get(id)).filter((i) => i !== undefined));
+      candidates = candidates.filter((i) => allowed.has(i));
+    }
     // An unknown tag can't match anything; an unknown excluded tag excludes nothing.
     const tags = query.tags.map((t) => this.tagIds.get(lower(t)) ?? -1);
     const notTags = query.notTags.map((t) => this.tagIds.get(lower(t))).filter((t) => t !== undefined);

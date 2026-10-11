@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { GameSummary } from "../../shared/types.ts";
+import type { BestOffer, GameSummary } from "../../shared/types.ts";
+import { SaveButton } from "./SaveButton.tsx";
 import { DECK_LABELS, formatCount, formatDate, formatPrice, reviewLabel, STORE_NAMES } from "../format.ts";
 
 interface Props {
@@ -7,6 +8,8 @@ interface Props {
   currency: string;
   onOpen: () => void;
   onTag: (tag: string) => void;
+  /** Cheapest offer across official stores; undefined = not looked up, null = none found. */
+  offer?: BestOffer | null;
 }
 
 export function Price({ game, currency }: { game: GameSummary; currency: string }) {
@@ -21,7 +24,7 @@ export function Price({ game, currency }: { game: GameSummary; currency: string 
   );
 }
 
-export function ResultCard({ game, currency, onOpen, onTag }: Props) {
+export function ResultCard({ game, currency, onOpen, onTag, offer }: Props) {
   const [imageFailed, setImageFailed] = useState(false);
   const review = reviewLabel(game.reviewPct, game.reviewCount);
   return (
@@ -36,7 +39,10 @@ export function ResultCard({ game, currency, onOpen, onTag }: Props) {
       <div className="card-body">
         <div className="card-title">
           <h2>{game.name}</h2>
-          <Price game={game} currency={currency} />
+          <div className="card-actions">
+            <Price game={game} currency={currency} />
+            <SaveButton id={game.id} />
+          </div>
         </div>
         <div className="card-meta">
           <span className={`review tone-${review.tone}`} title={`${game.reviewPct}% of ${game.reviewCount.toLocaleString()} reviews positive`}>
@@ -65,6 +71,7 @@ export function ResultCard({ game, currency, onOpen, onTag }: Props) {
             </button>
           ))}
         </div>
+        {offer && <OfferLine offer={offer} game={game} currency={currency} />}
         <div className="badges">
           {game.stores.map((s) => (
             <span key={s} className={`badge store-${s}`}>
@@ -78,5 +85,25 @@ export function ResultCard({ game, currency, onOpen, onTag }: Props) {
         </div>
       </div>
     </article>
+  );
+}
+
+/** "Cheapest: $31.99 at GameBillet" — CheapShark prices are USD, so only compare when we're in USD too. */
+function OfferLine({ offer, game, currency }: { offer: BestOffer; game: GameSummary; currency: string }) {
+  const cheaper = currency === "USD" && game.bestPrice !== null && offer.price < game.bestPrice;
+  const atLow = offer.historicLow !== null && offer.price <= offer.historicLow;
+  return (
+    <div className={`offer-line ${cheaper ? "cheaper" : ""}`}>
+      <a href={offer.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+        {cheaper ? "Cheaper elsewhere: " : "Cheapest: "}
+        <strong>{formatPrice(offer.price, "USD")}</strong> at {offer.shop}
+        {offer.discountPct > 0 && ` (−${offer.discountPct}%)`} ↗
+      </a>
+      {atLow ? (
+        <span className="low-badge">Historic low</span>
+      ) : (
+        offer.historicLow !== null && <span className="muted"> · lowest ever {formatPrice(offer.historicLow, "USD")}</span>
+      )}
+    </div>
   );
 }

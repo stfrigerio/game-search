@@ -103,6 +103,16 @@ export interface PriceOffer {
   kind: "official" | "keyshop";
 }
 
+/** Cheapest live official-store offer for a game (CheapShark, USD). */
+export interface BestOffer {
+  shop: string;
+  price: number;
+  basePrice: number;
+  discountPct: number;
+  url: string;
+  historicLow: number | null;
+}
+
 export interface PriceLink {
   shop: string;
   url: string;

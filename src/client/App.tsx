@@ -1,35 +1,59 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_QUERY, parseQuery, serializeQuery, SORTS, type SearchQuery, type SortKey } from "../shared/query.ts";
-import type { MetaResponse, SearchResponse } from "../shared/types.ts";
+import type { BestOffer, MetaResponse, SearchResponse } from "../shared/types.ts";
 import { api } from "./api.ts";
+import { Discover } from "./components/Discover.tsx";
 import { Filters } from "./components/Filters.tsx";
 import { GameDetail } from "./components/GameDetail.tsx";
 import { ResultCard } from "./components/ResultCard.tsx";
+import { SteamImport } from "./components/SteamImport.tsx";
 import { formatCount } from "./format.ts";
+import { useSavedList } from "./savedList.ts";
 
-/** Search state lives in the URL so any search can be bookmarked or shared. */
-function readUrl(): { query: SearchQuery; gameId: string | null } {
-  const params = new URLSearchParams(location.search);
-  return { query: parseQuery(params), gameId: params.get("game") };
+type View = "discover" | "search" | "list";
+
+interface UrlState {
+  view: View;
+  query: SearchQuery;
+  gameId: string | null;
 }
 
-function writeUrl(query: SearchQuery, gameId: string | null, push: boolean) {
+/** All state lives in the URL so any search can be bookmarked or shared. */
+function readUrl(): UrlState {
+  const params = new URLSearchParams(location.search);
+  const query = parseQuery(params);
+  const isDefault = serializeQuery(query).size === 0;
+  const view: View = params.get("view") === "list" ? "list" : isDefault ? "discover" : "search";
+  // Wishlists are full of unreleased games, so the list shows them unless told otherwise.
+  if (view === "list" && !params.has("upcoming")) query.upcoming = "include";
+  return { view, query, gameId: params.get("game") };
+}
+
+function urlFor({ view, query, gameId }: UrlState): string {
   const params = serializeQuery(query);
+  if (view === "list") params.set("view", "list");
   if (gameId) params.set("game", gameId);
-  const url = `${location.pathname}${params.size ? `?${params}` : ""}`;
-  if (url === `${location.pathname}${location.search}`) return;
-  history[push ? "pushState" : "replaceState"](null, "", url);
+  return `${location.pathname}${params.size ? `?${params}` : ""}`;
 }
 
 export function App() {
-  const [{ query, gameId }, setState] = useState(readUrl);
+  const [state, setState] = useState(readUrl);
+  const { view, query, gameId } = state;
   const [meta, setMeta] = useState<MetaResponse | null>(null);
   const [response, setResponse] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qInput, setQInput] = useState(query.q);
+  const [offers, setOffers] = useState<Record<string, BestOffer | null>>({});
   const [showFilters, setShowFilters] = useState(false);
-  const topRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const list = useSavedList();
+
+  const navigate = useCallback((next: UrlState, push = true) => {
+    const url = urlFor(next);
+    if (url !== `${location.pathname}${location.search}`) history[push ? "pushState" : "replaceState"](null, "", url);
+    setState(next);
+  }, []);
 
   useEffect(() => {
     const onPop = () => {
@@ -39,6 +63,19 @@ export function App() {
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // "/" focuses the search box, like on most sites.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
+      if (e.key === "/" && !typing) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   // Poll catalogue status until it's ready (first start crawls for a few minutes).
@@ -56,28 +93,31 @@ export function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  /** Change the query; leaves Discover for Search, keeps the list view on the list. */
   const update = useCallback(
     (patch: Partial<SearchQuery>, opts: { push?: boolean } = {}) => {
-      const next = { ...query, page: 1, ...patch };
-      writeUrl(next, null, opts.push ?? true);
-      setState({ query: next, gameId: null });
+      const nextQuery = { ...query, page: 1, ...patch };
+      const isDefault = serializeQuery(nextQuery).size === 0;
+      const nextView: View = view === "list" ? "list" : isDefault ? "discover" : "search";
+      navigate({ view: nextView, query: nextQuery, gameId: null }, opts.push ?? true);
     },
-    [query],
+    [query, view, navigate],
   );
 
   // Debounce typing into the search box.
   useEffect(() => {
     if (qInput === query.q) return;
-    const t = setTimeout(() => update({ q: qInput }, { push: false }), 250);
+    const t = setTimeout(() => update({ q: qInput }, { push: view !== "search" }), 250);
     return () => clearTimeout(t);
-  }, [qInput, query.q, update]);
+  }, [qInput, query.q, update, view]);
 
   const ready = !!meta?.gameCount;
+  const listKey = view === "list" ? list.ids.join(",") : "";
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || view === "discover") return;
     const ctrl = new AbortController();
     setLoading(true);
-    api.search(query, ctrl.signal).then(
+    api.search(query, { signal: ctrl.signal, ids: view === "list" ? list.ids : undefined }).then(
       (r) => {
         setResponse(r);
         setError(null);
@@ -90,18 +130,41 @@ export function App() {
       },
     );
     return () => ctrl.abort();
-  }, [query, ready]);
+    // list.ids is tracked through listKey so a new array with the same ids doesn't refetch.
+  }, [query, ready, view, listKey]);
 
-  const openGame = (id: string | null) => {
-    writeUrl(query, id, true);
-    setState({ query, gameId: id });
-  };
+  // On the list, look up the cheapest price anywhere for the games on screen.
+  useEffect(() => {
+    if (view !== "list" || !response?.results.length) return;
+    const ids = response.results.map((g) => g.id).filter((id) => !(id in offers));
+    if (!ids.length) return;
+    let live = true;
+    api.bestOffers(ids).then((found) => live && setOffers((o) => ({ ...o, ...found })), () => {});
+    return () => {
+      live = false;
+    };
+  }, [view, response]);
+
+  const openGame = (id: string | null) => navigate({ ...state, gameId: id });
   const addTag = (tag: string) => {
     if (!query.tags.includes(tag)) update({ tags: [...query.tags, tag], notTags: query.notTags.filter((t) => t !== tag) });
   };
   const goToPage = (page: number) => {
     update({ page });
-    topRef.current?.scrollIntoView({ behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  const goDiscover = () => {
+    setQInput("");
+    navigate({ view: "discover", query: DEFAULT_QUERY, gameId: null });
+  };
+  const goList = (patch: Partial<SearchQuery> = {}) => {
+    setQInput("");
+    navigate({ view: "list", query: { ...DEFAULT_QUERY, upcoming: "include", ...patch }, gameId: null });
+  };
+  const goSearch = (patch: Partial<SearchQuery>) => {
+    setQInput(patch.q ?? "");
+    navigate({ view: "search", query: { ...DEFAULT_QUERY, ...patch }, gameId: null });
+    window.scrollTo({ top: 0 });
   };
 
   const currency = meta?.currency ?? "USD";
@@ -109,90 +172,168 @@ export function App() {
   const activeFilters = [...serializeQuery({ ...query, q: "", sort: DEFAULT_QUERY.sort, page: 1 })].length;
 
   return (
-    <div className="app" ref={topRef}>
+    <div className="app">
       <header className="topbar">
-        <a className="logo" href="/" onClick={(e) => (e.preventDefault(), setQInput(""), update({ ...DEFAULT_QUERY }))}>
+        <a
+          className="logo"
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            goDiscover();
+          }}
+        >
           🎮 Game Search
         </a>
         <input
+          ref={searchRef}
           className="search"
           type="search"
-          autoFocus
-          placeholder={ready ? `Search ${formatCount(meta.gameCount)} games by title, developer or publisher…` : "Search games…"}
+          placeholder={
+            view === "list"
+              ? "Search your list…"
+              : ready
+                ? `Search ${formatCount(meta.gameCount)} games by title, developer or publisher…  ( / )`
+                : "Search games…"
+          }
           value={qInput}
           onChange={(e) => setQInput(e.target.value)}
         />
-        <select value={query.sort} onChange={(e) => update({ sort: e.target.value as SortKey })} aria-label="Sort by">
-          {Object.entries(SORTS).map(([key, label]) => (
-            <option key={key} value={key}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <button className="filters-toggle" onClick={() => setShowFilters((s) => !s)}>
-          Filters{activeFilters ? ` (${activeFilters})` : ""}
-        </button>
+        <nav className="tabs">
+          <button className={view === "discover" ? "active" : ""} onClick={goDiscover}>
+            Discover
+          </button>
+          <button className={view === "search" ? "active" : ""} onClick={() => goSearch({ sort: "rating" })}>
+            Browse
+          </button>
+          <button className={view === "list" ? "active" : ""} onClick={() => goList()}>
+            My list{list.ids.length ? ` (${list.ids.length})` : ""}
+          </button>
+        </nav>
       </header>
 
-      <div className="layout">
-        <div className={`filters-wrap ${showFilters ? "open" : ""}`}>
-          <Filters
-            query={query}
-            allTags={meta?.tags ?? []}
-            facets={response?.tagFacets ?? []}
-            currency={currency}
-            onChange={update}
-          />
+      {!ready && (
+        <div className="layout single">
+          <div className="notice">
+            <strong>Building the game catalogue…</strong>
+            <p className="muted">The first start crawls every store, which takes a few minutes. {meta?.progress ?? ""}</p>
+            {meta?.lastError && <p className="error">{meta.lastError}</p>}
+          </div>
         </div>
+      )}
 
-        <main>
-          {!ready && (
-            <div className="notice">
-              <strong>Building the game catalogue…</strong>
-              <p className="muted">
-                The first start crawls every store, which takes a few minutes. {meta?.progress ?? ""}
-              </p>
-              {meta?.lastError && <p className="error">{meta.lastError}</p>}
-            </div>
-          )}
-          {error && <p className="error">{error}</p>}
-          {response && (
-            <div className={`results ${loading ? "loading" : ""}`}>
-              <div className="results-head muted">
-                {response.total.toLocaleString()} {response.total === 1 ? "game" : "games"}
-                {meta?.refreshing && " · refreshing catalogue in the background"}
+      {ready && view === "discover" && (
+        <div className="layout single">
+          <Discover currency={currency} onOpen={openGame} onSearch={goSearch} onOpenList={goList} />
+        </div>
+      )}
+
+      {ready && view !== "discover" && (
+        <div className="layout">
+          <div className={`filters-wrap ${showFilters ? "open" : ""}`}>
+            <Filters
+              query={query}
+              allTags={meta?.tags ?? []}
+              facets={response?.tagFacets ?? []}
+              currency={currency}
+              onChange={update}
+            />
+          </div>
+
+          <main>
+            {view === "list" && <SteamImport />}
+            <div className="results-bar">
+              <span className="muted">
+                {response ? `${response.total.toLocaleString()} ${response.total === 1 ? "game" : "games"}` : ""}
+                {view === "list" && list.ids.length > 0 && response && response.total < list.ids.length
+                  ? ` of ${list.ids.length} saved`
+                  : ""}
+              </span>
+              <div className="results-controls">
+                <button className="filters-toggle" onClick={() => setShowFilters((s) => !s)}>
+                  Filters{activeFilters ? ` (${activeFilters})` : ""}
+                </button>
+                <select value={query.sort} onChange={(e) => update({ sort: e.target.value as SortKey })} aria-label="Sort by">
+                  {Object.entries(SORTS).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </div>
-              {response.results.map((g) => (
-                <ResultCard key={g.id} game={g} currency={currency} onOpen={() => openGame(g.id)} onTag={addTag} />
-              ))}
-              {response.total === 0 && <p className="muted">No games match. Try removing a filter.</p>}
-              {pages > 1 && (
-                <nav className="pager">
-                  <button disabled={query.page <= 1} onClick={() => goToPage(query.page - 1)}>
-                    ← Prev
-                  </button>
-                  <span>
-                    Page {query.page} of {pages.toLocaleString()}
-                  </span>
-                  <button disabled={query.page >= pages} onClick={() => goToPage(query.page + 1)}>
-                    Next →
-                  </button>
-                </nav>
-              )}
             </div>
-          )}
-          {meta?.updatedAt && (
-            <footer className="muted small">
-              Catalogue updated {new Date(meta.updatedAt).toLocaleString()} ·{" "}
-              {Object.entries(meta.storeCounts)
-                .map(([s, n]) => `${s}: ${n.toLocaleString()}`)
-                .join(" · ")}
-            </footer>
-          )}
-        </main>
-      </div>
+            {error && <p className="error">{error}</p>}
+            {response && (
+              <div className={`results ${loading ? "loading" : ""}`}>
+                {response.results.map((g) => (
+                  <ResultCard
+                    key={g.id}
+                    game={g}
+                    currency={currency}
+                    onOpen={() => openGame(g.id)}
+                    onTag={addTag}
+                    offer={view === "list" ? offers[g.id] : undefined}
+                  />
+                ))}
+                {response.total === 0 && (
+                  <div className="empty">
+                    {view === "list" && !list.ids.length ? (
+                      <p className="muted">
+                        Your list is empty. Tap ☆ on any game to save it, or import your Steam wishlist above.
+                      </p>
+                    ) : (
+                      <>
+                        <p className="muted">No games match.</p>
+                        {activeFilters > 0 && (
+                          <button className="primary" onClick={() => update({ ...DEFAULT_QUERY, q: query.q, sort: query.sort })}>
+                            Clear {activeFilters} filter{activeFilters > 1 ? "s" : ""}
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+                {pages > 1 && (
+                  <nav className="pager">
+                    <button disabled={query.page <= 1} onClick={() => goToPage(query.page - 1)}>
+                      ← Prev
+                    </button>
+                    <span>
+                      Page {query.page} of {pages.toLocaleString()}
+                    </span>
+                    <button disabled={query.page >= pages} onClick={() => goToPage(query.page + 1)}>
+                      Next →
+                    </button>
+                  </nav>
+                )}
+                {view === "list" && list.ids.length > 0 && (
+                  <p className="muted small list-footer">
+                    Your list is stored in this browser.{" "}
+                    <button
+                      className="link-button"
+                      onClick={() => confirm(`Remove all ${list.ids.length} games from your list?`) && list.clear()}
+                    >
+                      Clear list
+                    </button>
+                  </p>
+                )}
+              </div>
+            )}
+          </main>
+        </div>
+      )}
 
-      {gameId && <GameDetail id={gameId} currency={currency} onClose={() => openGame(null)} onTag={(t) => addTag(t)} />}
+      {meta?.updatedAt && (
+        <footer className="muted small">
+          Catalogue updated {new Date(meta.updatedAt).toLocaleString()} ·{" "}
+          {Object.entries(meta.storeCounts)
+            .map(([s, n]) => `${s}: ${n.toLocaleString()}`)
+            .join(" · ")}
+        </footer>
+      )}
+
+      {gameId && (
+        <GameDetail id={gameId} currency={currency} onClose={() => openGame(null)} onTag={addTag} onOpen={openGame} />
+      )}
     </div>
   );
 }

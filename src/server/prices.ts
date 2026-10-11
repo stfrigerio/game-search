@@ -1,5 +1,5 @@
 import type { Game, PriceLink, PriceOffer, PricesResponse } from "../shared/types.ts";
-import { fetchJson } from "./http.ts";
+import { fetchJson, mapLimit } from "./http.ts";
 
 // CheapShark tracks official stores (Steam, GOG, Humble, Fanatical, GMG, Epic, ...). Prices are USD.
 const CHEAPSHARK = "https://www.cheapshark.com/api/1.0";
@@ -50,6 +50,8 @@ export function priceLinks(game: Game): PriceLink[] {
 }
 
 const cache = new Map<string, { at: number; value: Promise<PricesResponse> }>();
+/** Our game id -> CheapShark game id (null = CheapShark doesn't know it). These never change. */
+const cheapSharkIds = new Map<string, string | null>();
 let storesPromise: Promise<Map<string, string>> | null = null;
 
 function storeNames(): Promise<Map<string, string>> {
@@ -63,56 +65,113 @@ function storeNames(): Promise<Map<string, string>> {
 }
 
 async function findCheapSharkId(game: Game): Promise<string | null> {
+  if (cheapSharkIds.has(game.id)) return cheapSharkIds.get(game.id)!;
   const query = game.steamAppId
     ? `steamAppID=${game.steamAppId}`
     : `title=${encodeURIComponent(game.name)}&exact=1&limit=1`;
   const results = await fetchJson<CsGame[]>(`${CHEAPSHARK}/games?${query}`, { retries: 1 });
-  return results[0]?.gameID ?? null;
+  const id = results[0]?.gameID ?? null;
+  cheapSharkIds.set(game.id, id);
+  return id;
 }
 
 const cents = (s: string) => Math.round(Number(s) * 100);
 
-async function fetchPrices(game: Game): Promise<PricesResponse> {
+function buildResponse(game: Game, detail: CsGameDetail | null, names: Map<string, string>): PricesResponse {
   const links = priceLinks(game);
+  const offers: PriceOffer[] = (detail?.deals ?? [])
+    .map((d) => ({
+      shop: names.get(d.storeID) ?? `Store ${d.storeID}`,
+      price: cents(d.price),
+      basePrice: cents(d.retailPrice),
+      discountPct: Math.round(Number(d.savings)),
+      url: `https://www.cheapshark.com/redirect?dealID=${d.dealID}`,
+      kind: "official" as const,
+    }))
+    .sort((a, b) => a.price - b.price);
+  // Don't also link to a store we already have a live price for.
+  const priced = new Set(offers.map((o) => o.shop.toLowerCase()));
+  return {
+    currency: "USD",
+    offers,
+    links: links.filter((l) => !priced.has(l.shop.toLowerCase())),
+    historicLow: detail?.cheapestPriceEver ? cents(detail.cheapestPriceEver.price) : null,
+    error: null,
+  };
+}
+
+async function fetchPrices(game: Game): Promise<PricesResponse> {
   try {
     const id = await findCheapSharkId(game);
-    if (!id) return { currency: "USD", offers: [], links, historicLow: null, error: null };
     const [detail, names] = await Promise.all([
-      fetchJson<CsGameDetail>(`${CHEAPSHARK}/games?id=${id}`, { retries: 1 }),
+      id ? fetchJson<CsGameDetail>(`${CHEAPSHARK}/games?id=${id}`, { retries: 1 }) : null,
       storeNames(),
     ]);
-    const offers: PriceOffer[] = detail.deals
-      .map((d) => ({
-        shop: names.get(d.storeID) ?? `Store ${d.storeID}`,
-        price: cents(d.price),
-        basePrice: cents(d.retailPrice),
-        discountPct: Math.round(Number(d.savings)),
-        url: `https://www.cheapshark.com/redirect?dealID=${d.dealID}`,
-        kind: "official" as const,
-      }))
-      .sort((a, b) => a.price - b.price);
-    // Don't also link to a store we already have a live price for.
-    const priced = new Set(offers.map((o) => o.shop.toLowerCase()));
-    return {
-      currency: "USD",
-      offers,
-      links: links.filter((l) => !priced.has(l.shop.toLowerCase())),
-      historicLow: detail.cheapestPriceEver ? cents(detail.cheapestPriceEver.price) : null,
-      error: null,
-    };
+    return buildResponse(game, detail, names);
   } catch (err) {
-    return { currency: "USD", offers: [], links, historicLow: null, error: `Price lookup failed: ${String(err)}` };
+    return { ...buildResponse(game, null, new Map()), error: `Price lookup failed: ${String(err)}` };
   }
 }
 
-export function getPrices(game: Game): Promise<PricesResponse> {
-  const hit = cache.get(game.id);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.value;
-  const value = fetchPrices(game).then((res) => {
-    if (res.error) cache.delete(game.id); // retry failures on the next request
+function remember(id: string, value: Promise<PricesResponse>) {
+  const tracked = value.then((res) => {
+    if (res.error) cache.delete(id); // retry failures on the next request
     return res;
   });
-  cache.set(game.id, { at: Date.now(), value });
+  cache.set(id, { at: Date.now(), value: tracked });
   if (cache.size > 5000) cache.delete(cache.keys().next().value!);
-  return value;
+  return tracked;
+}
+
+function cached(id: string): Promise<PricesResponse> | null {
+  const hit = cache.get(id);
+  return hit && Date.now() - hit.at < CACHE_MS ? hit.value : null;
+}
+
+export function getPrices(game: Game): Promise<PricesResponse> {
+  return cached(game.id) ?? remember(game.id, fetchPrices(game));
+}
+
+const BATCH = 25; // CheapShark's limit for /games?ids=
+
+/**
+ * Prices for many games with as few CheapShark calls as possible: ids are
+ * resolved once (and kept forever), then deals are fetched 25 games per request.
+ */
+export async function getPricesBatch(games: Game[]): Promise<Map<string, PricesResponse>> {
+  const out = new Map<string, PricesResponse>();
+  const missing = games.filter((g) => !cached(g.id));
+  if (missing.length) {
+    const resolved = await mapLimit(missing, 2, async (g) => {
+      try {
+        return { game: g, csId: await findCheapSharkId(g) };
+      } catch {
+        return { game: g, csId: undefined }; // lookup failed; try again next time
+      }
+    });
+    const names = await storeNames().catch(() => new Map<string, string>());
+    const withIds = resolved.filter((r): r is { game: Game; csId: string } => !!r.csId);
+    for (const r of resolved) if (r.csId === null) remember(r.game.id, Promise.resolve(buildResponse(r.game, null, names)));
+    for (let k = 0; k < withIds.length; k += BATCH) {
+      const chunk = withIds.slice(k, k + BATCH);
+      const request = fetchJson<Record<string, CsGameDetail>>(
+        `${CHEAPSHARK}/games?ids=${chunk.map((c) => c.csId).join(",")}`,
+        { retries: 1 },
+      );
+      for (const { game, csId } of chunk) {
+        remember(
+          game.id,
+          request.then(
+            (details) => buildResponse(game, details[csId] ?? null, names),
+            (err) => ({ ...buildResponse(game, null, names), error: `Price lookup failed: ${String(err)}` }),
+          ),
+        );
+      }
+    }
+  }
+  for (const g of games) {
+    const value = cached(g.id);
+    if (value) out.set(g.id, await value);
+  }
+  return out;
 }

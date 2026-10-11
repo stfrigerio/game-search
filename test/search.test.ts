@@ -86,6 +86,48 @@ describe("SearchIndex", () => {
   });
 });
 
+describe("discovery features", () => {
+  const disc = (pct: number) => (g: Game) => {
+    g.stores[0].discountPct = pct;
+    return g;
+  };
+  const idx = new SearchIndex([
+    game("Deckbuilder A", { tags: ["Roguelike Deckbuilder", "Card Game", "Indie"], reviews: [50_000, 97] }),
+    game("Deckbuilder B", { tags: ["Card Game", "Roguelike Deckbuilder", "Indie"], reviews: [20_000, 95] }),
+    game("Shooter", { tags: ["FPS", "Indie"], reviews: [90_000, 96] }),
+    game("Card Thing", { tags: ["Card Game", "Indie"], reviews: [400, 99] }),
+    ...[1, 2, 3, 4, 5, 6, 7, 8].map((k) => game(`Filler ${k}`, { tags: ["Indie", "Casual"], reviews: [100, 70] })),
+  ]);
+  const ids = idx.games.map((g) => g.id);
+
+  it("finds similar games by shared distinctive tags", () => {
+    const names = idx.similar(ids[0]).map((g) => g.name);
+    expect(names[0]).toBe("Deckbuilder B");
+    expect(names).not.toContain("Deckbuilder A");
+    expect(names).not.toContain("Shooter");
+  });
+
+  it("ranks deals by discount weighted by rating", () => {
+    const deals = new SearchIndex([
+      disc(90)(game("Bad but cheap", { reviews: [1000, 40] })),
+      disc(50)(game("Great half off", { reviews: [1000, 97] })),
+      disc(0)(game("Full price", { reviews: [1000, 99] })),
+    ]);
+    const names = deals.search({ ...DEFAULT_QUERY, sort: "deal" }).results.map((r) => r.name);
+    expect(names[0]).toBe("Great half off");
+  });
+
+  it("caps review counts for hidden gems", () => {
+    const names = idx.search({ ...DEFAULT_QUERY, minPct: 90, maxReviews: 1000 }).results.map((r) => r.name);
+    expect(names).toEqual(["Card Thing"]);
+  });
+
+  it("restricts a search to a list of ids", () => {
+    const res = idx.search({ ...DEFAULT_QUERY, sort: "name" }, 30, [ids[2], ids[0], "steam:does-not-exist"]);
+    expect(res.results.map((r) => r.name)).toEqual(["Deckbuilder A", "Shooter"]);
+  });
+});
+
 describe("query params", () => {
   it("round-trips through the URL", () => {
     const q: SearchQuery = { ...DEFAULT_QUERY, q: "rogue", tags: ["Roguelike"], notTags: ["Anime"], maxPrice: 20, deck: 3, sort: "rating", page: 3 };
