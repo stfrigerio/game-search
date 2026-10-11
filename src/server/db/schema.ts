@@ -8,7 +8,7 @@ export const STAGING = "catalog_staging";
  * Bump when the catalogue tables change. The catalogue is rebuilt from scratch by
  * every crawl, so a new version just means "run the crawl after deploying".
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /**
  * Tables for one catalogue. Everything here is rebuilt by each crawl, so the whole

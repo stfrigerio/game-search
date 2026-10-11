@@ -35,7 +35,7 @@ function gameValues(g: Game, tagId: (tag: string) => number): [unknown[], unknow
       featureMask(g.categories),
       languageMask(g.languages),
       languageMask(g.audioLanguages),
-      contentMask(g.contentDescriptors),
+      contentMask(g.contentDescriptors, g.tags),
       g.peakPlayers,
       g.steamAppId,
       s.stores,

@@ -1,4 +1,4 @@
-import { CONTENT_FILTERS, FEATURES, LANGUAGES } from "../shared/features.ts";
+import { CONTENT_FILTERS, FEATURES, LANGUAGES, PORN_TAG_RANK } from "../shared/features.ts";
 import type { Game, GameSummary, StoreListing } from "../shared/types.ts";
 import { estimateLevel } from "./power.ts";
 
@@ -70,6 +70,10 @@ const DESCRIPTOR_BITS = new Map<number, number>();
 CONTENT_FILTERS.forEach((c, bit) => {
   for (const d of c.descriptors) DESCRIPTOR_BITS.set(d, (DESCRIPTOR_BITS.get(d) ?? 0) | (1 << bit));
 });
+const TOP_TAG_BITS = new Map<string, number>();
+CONTENT_FILTERS.forEach((c, bit) => {
+  for (const t of c.topTags) TOP_TAG_BITS.set(t, (TOP_TAG_BITS.get(t) ?? 0) | (1 << bit));
+});
 
 /** Bit i set = the game has FEATURES[i]. */
 export function featureMask(categories: number[]): number {
@@ -86,9 +90,10 @@ export function languageMask(ids: number[]): number {
 }
 
 /** Bit i set = the game has CONTENT_FILTERS[i] content. */
-export function contentMask(descriptors: number[]): number {
+export function contentMask(descriptors: number[], tags: string[] = []): number {
   let m = 0;
   for (const d of descriptors) m |= DESCRIPTOR_BITS.get(d) ?? 0;
+  for (const t of tags.slice(0, PORN_TAG_RANK)) m |= TOP_TAG_BITS.get(t.toLowerCase()) ?? 0;
   return m;
 }
 

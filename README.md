@@ -32,7 +32,9 @@ across official stores and key resellers (G2A, Kinguin, Eneba, Instant Gaming, â
     Family Sharing, HDR, and *no in-app purchases*
   - **Accessibility**: adjustable difficulty, save anytime, subtitle options,
     colour-blind modes, no timed input, keyboard-only, text size
-  - **Hide content**: sexual content, gore, general mature content
+  - **Hide content**: porn (games Steam marks adult-only, or with Hentai / NSFW among their
+    top five tags), any sexual content, gore, general mature content. The front-page
+    shelves and the capsule machine always leave porn out.
   - Store and developer/publisher (click a developer name)
   - Every feature can be required or excluded; active filters show as removable chips,
     and common ones are one tap away (Co-op, On sale, Deck Verified, Popular now, â€¦).

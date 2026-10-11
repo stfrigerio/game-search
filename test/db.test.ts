@@ -227,3 +227,15 @@ describe.skipIf(!url)("computer power", () => {
   });
 });
 
+describe.skipIf(!url)("no porn", () => {
+  it("hides porn without hiding games that merely have a sex scene", async () => {
+    await load([
+      game("Adult Only", { content: [3], reviews: [100, 80] }),
+      game("Tagged Hentai Up Top", { tags: ["Hentai", "Puzzle"], reviews: [100, 80] }),
+      game("Hero Shooter With A Joke Tag", { tags: ["FPS", "Shooter", "Multiplayer", "Action", "Free to Play", "Hentai"], reviews: [100, 80] }),
+      game("RPG With A Sex Scene", { content: [1, 5], tags: ["RPG", "Nudity"], reviews: [100, 80] }),
+    ]);
+    expect((await names({ hide: ["porn"] })).sort()).toEqual(["Hero Shooter With A Joke Tag", "RPG With A Sex Scene"]);
+    expect(await names({ hide: ["sexual"] })).toEqual(expect.not.arrayContaining(["RPG With A Sex Scene", "Adult Only"]));
+  });
+});

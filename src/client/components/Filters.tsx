@@ -367,7 +367,8 @@ export function Filters({ query, allTags, response, currency, specsRead, gameCou
       </Section>
 
       <Section title="Hide content" active={query.hide.length}>
-        {CONTENT_FILTERS.map((c) => (
+        {/* Porn first: it is the one most people reach for. */}
+        {[...CONTENT_FILTERS].sort((a, b) => Number(b.key === "porn") - Number(a.key === "porn")).map((c) => (
           <label key={c.key} className="check">
             <input type="checkbox" checked={query.hide.includes(c.key)} onChange={() => onChange({ hide: toggle(query.hide, c.key) })} />
             {c.label}

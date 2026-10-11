@@ -61,7 +61,7 @@ export function describeFilters(q: SearchQuery, currency: string): Chip[] {
   }
   for (const h of q.hide) {
     chips.push({
-      label: `Hide ${CONTENT_FILTERS.find((c) => c.key === h)?.label.toLowerCase() ?? h}`,
+      label: h === "porn" ? "No porn" : `Hide ${CONTENT_FILTERS.find((c) => c.key === h)?.label.toLowerCase() ?? h}`,
       clear: { hide: q.hide.filter((x) => x !== h) },
     });
   }
@@ -121,6 +121,11 @@ const QUICK: { label: string; on: (q: SearchQuery) => boolean; toggle: (q: Searc
   },
   { label: "On sale", on: (q) => q.discounted, toggle: (_q, on) => ({ discounted: !on, minDiscount: null }) },
   { label: "Under 10", on: (q) => q.maxPrice === 10, toggle: (_q, on) => ({ maxPrice: on ? null : 10 }) },
+  {
+    label: "No porn",
+    on: (q) => q.hide.includes("porn"),
+    toggle: (q, on) => ({ hide: on ? q.hide.filter((h) => h !== "porn") : [...q.hide, "porn"] }),
+  },
   {
     label: "Runs on anything",
     on: (q) => q.power.length === 1 && q.power[0] === "low",

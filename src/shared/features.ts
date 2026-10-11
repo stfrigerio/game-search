@@ -103,11 +103,21 @@ export const LANGUAGES = [
 
 export const LANGUAGE_BY_CODE = new Map<string, (typeof LANGUAGES)[number]>(LANGUAGES.map((l) => [l.code, l]));
 
-/** Steam content descriptors, grouped into what people actually want to hide. */
+/**
+ * Steam content descriptors, grouped into what people actually want to hide. The order
+ * is the bit position in the catalogue's content mask, so add new entries at the end.
+ *
+ * "porn" is narrower than "sexual": games Steam marks as adult-only sexual content
+ * (descriptor 3), plus games whose `topTags` rank among their first PORN_TAG_RANK tags.
+ * A Hentai tag far down the list is players joking (Marvel Rivals has one), so only a
+ * prominent one counts. A game with a sex scene (The Witcher 3) is "sexual", not "porn".
+ */
 export const CONTENT_FILTERS = [
-  { key: "sexual", label: "Sexual content / nudity", descriptors: [1, 3, 4] },
-  { key: "gore", label: "Frequent violence or gore", descriptors: [2] },
-  { key: "mature", label: "General mature content", descriptors: [5] },
+  { key: "sexual", label: "Sexual content / nudity", descriptors: [1, 3, 4], topTags: [] },
+  { key: "gore", label: "Frequent violence or gore", descriptors: [2], topTags: [] },
+  { key: "mature", label: "General mature content", descriptors: [5], topTags: [] },
+  { key: "porn", label: "Porn (adult-only games)", descriptors: [3], topTags: ["hentai", "nsfw"] },
 ] as const;
+export const PORN_TAG_RANK = 5;
 
 export type ContentKey = (typeof CONTENT_FILTERS)[number]["key"];

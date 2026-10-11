@@ -18,47 +18,47 @@ export const SHELVES: { title: string; subtitle: string; query: Partial<SearchQu
   {
     title: "Best deals right now",
     subtitle: "Big discounts on games people actually like",
-    query: { sort: "deal", discounted: true, minReviews: 200 },
+    query: { hide: ["porn"], sort: "deal", discounted: true, minReviews: 200 },
   },
   {
     title: "Most played right now",
     subtitle: "Peak players on Steam yesterday",
-    query: { sort: "players", minPlayers: 1000 },
+    query: { hide: ["porn"], sort: "players", minPlayers: 1000 },
   },
   {
     title: "Couch co-op night",
     subtitle: "Best rated local and split-screen co-op",
-    query: { sort: "rating", features: ["localCoop"], minReviews: 200 },
+    query: { hide: ["porn"], sort: "rating", features: ["localCoop"], minReviews: 200 },
   },
   {
     title: "Hidden gems",
     subtitle: "95%+ positive, but under 1,000 reviews",
-    query: { sort: "rating", minPct: 95, minReviews: 50, maxReviews: 1000 },
+    query: { hide: ["porn"], sort: "rating", minPct: 95, minReviews: 50, maxReviews: 1000 },
   },
   {
     title: "Runs on a potato",
     subtitle: "Loved games that need next to no computer",
-    query: { sort: "rating", power: ["low"], minReviews: 1000 },
+    query: { hide: ["porn"], sort: "rating", power: ["low"], minReviews: 1000 },
   },
   {
     title: "Best of the past year",
     subtitle: `Top rated games released since ${year - 1}`,
-    query: { sort: "rating", minYear: year - 1, minReviews: 200 },
+    query: { hide: ["porn"], sort: "rating", minYear: year - 1, minReviews: 200 },
   },
   {
     title: "Great Steam Deck games under $10",
     subtitle: "Deck Verified, well reviewed, cheap",
-    query: { sort: "rating", deck: 3, maxPrice: 10, minReviews: 500, free: "exclude" },
+    query: { hide: ["porn"], sort: "rating", deck: 3, maxPrice: 10, minReviews: 500, free: "exclude" },
   },
   {
     title: "Free and actually good",
     subtitle: "Free-to-play with strong reviews",
-    query: { sort: "rating", free: "only", minReviews: 1000 },
+    query: { hide: ["porn"], sort: "rating", free: "only", minReviews: 1000 },
   },
   {
     title: "DRM-free classics on GOG",
     subtitle: "Highest rated games you can buy without DRM",
-    query: { sort: "rating", stores: ["gog"], minReviews: 500 },
+    query: { hide: ["porn"], sort: "rating", stores: ["gog"], minReviews: 500 },
   },
 ];
 

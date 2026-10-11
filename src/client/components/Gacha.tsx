@@ -6,7 +6,7 @@ import { CAPSULE, COIN, MACHINE, MACHINE_TURN, Pixel, SPARK } from "../pixel.tsx
 import { MiniCard } from "./MiniCard.tsx";
 
 /** What the machine is filled with: games most people who played them liked. */
-const POOL: SearchQuery = { ...DEFAULT_QUERY, sort: "rating", minPct: 90, minReviews: 500 };
+const POOL: SearchQuery = { ...DEFAULT_QUERY, sort: "rating", minPct: 90, minReviews: 500, hide: ["porn"] };
 /** Long enough to see the machine rattle. */
 const TURN_MS = 900;
 
