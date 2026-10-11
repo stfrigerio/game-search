@@ -58,7 +58,7 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Prop
         </button>
         {error && <p className="error">{error}</p>}
         {!game || !summary ? (
-          !error && <p className="muted">Loading…</p>
+          !error && <p className="muted loading-line">Fetching the game…</p>
         ) : (
           <>
             {game.image && <img className="hero" src={game.image} alt="" />}
@@ -66,19 +66,18 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Prop
               <h2>{game.name}</h2>
               <SaveButton id={game.id} large />
             </div>
-            <p className="muted">
-              {formatDate(game.releaseDate, game.comingSoon)}
+            <p className="detail-facts muted">
+              <span>{formatDate(game.releaseDate, game.comingSoon)}</span>
               {game.developers.map((d) => (
-                <span key={d}>
-                  {" · "}
-                  <button className="dev-link" title={`More by ${d}`} onClick={() => onDev(d)}>
-                    {d}
-                  </button>
-                </span>
+                <button key={d} className="dev-link" title={`More by ${d}`} onClick={() => onDev(d)}>
+                  {d}
+                </button>
               ))}
-              {game.publishers.length > 0 && game.publishers.join() !== game.developers.join() && ` · ${game.publishers.join(", ")}`}
+              {game.publishers.length > 0 && game.publishers.join() !== game.developers.join() && (
+                <span>Published by {game.publishers.join(", ")}</span>
+              )}
             </p>
-            {game.description && <p>{game.description}</p>}
+            {game.description && <p className="detail-description">{game.description}</p>}
             <div className="card-tags">
               {game.tags.map((t) => (
                 <button key={t} className="tag" onClick={() => onTag(t)}>
@@ -99,10 +98,9 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Prop
             </div>
 
             {(game.peakPlayers || game.owners) && (
-              <p className="muted small">
-                {game.peakPlayers ? `👥 ${game.peakPlayers.toLocaleString()} peak players yesterday` : ""}
-                {game.peakPlayers && game.owners ? " · " : ""}
-                {game.owners ? `${game.owners.replace(" .. ", "–")} owners (estimate)` : ""}
+              <p className="detail-facts muted small">
+                {game.peakPlayers ? <span>{game.peakPlayers.toLocaleString()} playing at yesterday's peak</span> : null}
+                {game.owners ? <span>{game.owners.replace(" .. ", "–")} owners (estimate)</span> : null}
               </p>
             )}
 
@@ -131,13 +129,13 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Prop
               <p className="small languages">
                 <span className="muted">Languages: </span>
                 {detail.languages
-                  .map((l) => `${LANGUAGE_BY_CODE.get(l.code)?.name ?? l.code}${l.audio ? " 🔊" : ""}`)
+                  .map((l) => `${LANGUAGE_BY_CODE.get(l.code)?.name ?? l.code}${l.audio ? "*" : ""}`)
                   .join(", ")}
-                <span className="muted"> (🔊 full audio)</span>
+                <span className="muted"> (* also voiced)</span>
               </p>
             )}
 
-            <h3>Stores</h3>
+            <h3>Where to buy</h3>
             <table className="prices">
               <tbody>
                 {game.stores.map((s) => {
@@ -166,11 +164,11 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Prop
               </tbody>
             </table>
 
-            <h3>Compare prices</h3>
+            <h3>Other shops</h3>
             {!prices ? (
-              <p className="muted">Checking other stores…</p>
+              <p className="muted loading-line">Asking the other shops…</p>
             ) : (
-              <>
+              <div className="receipt">
                 {prices.error && <p className="error small">{prices.error}</p>}
                 {prices.offers.length > 0 && (
                   <table className="prices">
@@ -192,7 +190,10 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Prop
                   </table>
                 )}
                 {prices.historicLow !== null && (
-                  <p className="muted small">Historic low: {formatPrice(prices.historicLow, prices.currency)}</p>
+                  <p className="receipt-total">
+                    <span>Lowest it has ever been</span>
+                    <strong>{formatPrice(prices.historicLow, prices.currency)}</strong>
+                  </p>
                 )}
                 {prices.offers.length > 0 && <p className="muted small">Live prices via CheapShark, in {prices.currency}.</p>}
                 {(["official", "keyshop", "tracker"] as const).map((kind) => {
@@ -202,22 +203,22 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Prop
                     <div key={kind} className="link-group">
                       <div className="muted small">
                         {KIND_LABELS[kind]}
-                        {kind === "keyshop" && " — grey-market keys: often cheaper, but the developer may not get paid"}
+                        {kind === "keyshop" && ". Grey-market keys: often cheaper, but the developer may not get paid."}
                       </div>
                       {links.map((l) => (
                         <a key={l.shop} className="shop-link" href={l.url} target="_blank" rel="noreferrer">
-                          {l.shop} ↗
+                          {l.shop}
                         </a>
                       ))}
                     </div>
                   );
                 })}
-              </>
+              </div>
             )}
 
             {similar && similar.length > 0 && (
               <>
-                <h3>Similar games</h3>
+                <h3>If you like this one</h3>
                 <div className="similar-grid">
                   {similar.map((g) => (
                     <MiniCard key={g.id} game={g} currency={currency} onOpen={() => onOpen(g.id)} />

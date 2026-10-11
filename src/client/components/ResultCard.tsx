@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { BestOffer, GameSummary } from "../../shared/types.ts";
+import { HEART, Pixel } from "../pixel.tsx";
 import { SaveButton } from "./SaveButton.tsx";
 import { DECK_LABELS, formatCount, formatDate, formatPrice, reviewLabel, saleEnds, STORE_NAMES } from "../format.ts";
 
@@ -14,12 +15,12 @@ interface Props {
 }
 
 export function Price({ game, currency }: { game: GameSummary; currency: string }) {
-  if (game.free) return <span className="price">Free</span>;
-  if (game.bestPrice === null) return <span className="price muted">—</span>;
+  if (game.free) return <span className="price free">Free</span>;
+  if (game.bestPrice === null) return <span className="price none">No price</span>;
   return (
-    <span className="price">
+    <span className={`price ${game.bestDiscountPct > 0 ? "sale" : ""}`}>
       {game.bestDiscountPct > 0 && <span className="discount">−{game.bestDiscountPct}%</span>}
-      {game.bestDiscountPct > 0 && <s className="muted">{formatPrice(game.bestBasePrice, currency)}</s>}
+      {game.bestDiscountPct > 0 && <s>{formatPrice(game.bestBasePrice, currency)}</s>}
       <strong>{formatPrice(game.bestPrice, currency)}</strong>
     </span>
   );
@@ -47,11 +48,11 @@ export function ResultCard({ game, currency, onOpen, onTag, onDev, offer }: Prop
         </div>
         <div className="card-meta">
           <span className={`review tone-${review.tone}`} title={`${game.reviewPct}% of ${game.reviewCount.toLocaleString()} reviews positive`}>
+            <Pixel art={HEART} size={2} />
             {review.label}
             {game.reviewCount >= 10 && (
               <span className="muted">
-                {" "}
-                · {game.reviewPct}% of {formatCount(game.reviewCount)}
+                {game.reviewPct}% of {formatCount(game.reviewCount)}
               </span>
             )}
           </span>
@@ -70,7 +71,7 @@ export function ResultCard({ game, currency, onOpen, onTag, onDev, offer }: Prop
           )}
           {game.peakPlayers ? (
             <span className="muted" title="Peak concurrent players on Steam yesterday (SteamSpy)">
-              👥 {formatCount(game.peakPlayers)} playing
+              {formatCount(game.peakPlayers)} playing
             </span>
           ) : null}
         </div>
@@ -115,12 +116,12 @@ function OfferLine({ offer, game, currency }: { offer: BestOffer; game: GameSumm
       <a href={offer.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
         {cheaper ? "Cheaper elsewhere: " : "Cheapest: "}
         <strong>{formatPrice(offer.price, "USD")}</strong> at {offer.shop}
-        {offer.discountPct > 0 && ` (−${offer.discountPct}%)`} ↗
+        {offer.discountPct > 0 && ` (−${offer.discountPct}%)`}
       </a>
       {atLow ? (
         <span className="low-badge">Historic low</span>
       ) : (
-        offer.historicLow !== null && <span className="muted"> · lowest ever {formatPrice(offer.historicLow, "USD")}</span>
+        offer.historicLow !== null && <span className="muted">lowest ever {formatPrice(offer.historicLow, "USD")}</span>
       )}
     </div>
   );

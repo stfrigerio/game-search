@@ -8,7 +8,8 @@ import { Filters } from "./components/Filters.tsx";
 import { GameDetail } from "./components/GameDetail.tsx";
 import { ResultCard } from "./components/ResultCard.tsx";
 import { SteamImport } from "./components/SteamImport.tsx";
-import { formatCount } from "./format.ts";
+import { formatCount, STORE_NAMES } from "./format.ts";
+import { LOGO, Pixel, SLIME } from "./pixel.tsx";
 import { useSavedList } from "./savedList.ts";
 
 type View = "discover" | "search" | "list";
@@ -204,22 +205,27 @@ export function App() {
             goDiscover();
           }}
         >
-          🎮 Game Search
+          <Pixel art={LOGO} size={3} />
+          <span>game search</span>
         </a>
-        <input
-          ref={searchRef}
-          className="search"
-          type="search"
-          placeholder={
-            view === "list"
-              ? "Search your list…"
-              : ready
-                ? `Search ${formatCount(meta.gameCount)} games by title, developer or publisher…  ( / )`
-                : "Search games…"
-          }
-          value={qInput}
-          onChange={(e) => setQInput(e.target.value)}
-        />
+        <label className="search-box">
+          <span className="visually-hidden">Search games</span>
+          <input
+            ref={searchRef}
+            className="search"
+            type="search"
+            placeholder={
+              view === "list"
+                ? "Search your list"
+                : ready
+                  ? `Search ${formatCount(meta.gameCount)} games by title, developer or publisher`
+                  : "Search games"
+            }
+            value={qInput}
+            onChange={(e) => setQInput(e.target.value)}
+          />
+          <kbd title="Press / to search">/</kbd>
+        </label>
         <nav className="tabs">
           <button className={view === "discover" ? "active" : ""} onClick={goDiscover}>
             Discover
@@ -228,7 +234,7 @@ export function App() {
             Browse
           </button>
           <button className={view === "list" ? "active" : ""} onClick={() => goList()}>
-            My list{list.ids.length ? ` (${list.ids.length})` : ""}
+            My list{list.ids.length ? <span className="tab-count">{list.ids.length}</span> : null}
           </button>
         </nav>
       </header>
@@ -236,8 +242,13 @@ export function App() {
       {!ready && (
         <div className="layout single">
           <div className="notice">
-            <strong>Building the game catalogue…</strong>
-            <p className="muted">The first start crawls every store, which takes a few minutes. {meta?.progress ?? ""}</p>
+            <Pixel art={SLIME} size={6} className="bob" />
+            <h1>Stocking the shelves</h1>
+            <p className="muted">
+              The first start reads every store's catalogue, which takes a few minutes. This page fills in by itself when it is
+              done.
+            </p>
+            {meta?.progress && <p className="progress-line">{meta.progress}</p>}
             {meta?.lastError && <p className="error">{meta.lastError}</p>}
           </div>
         </div>
@@ -245,7 +256,7 @@ export function App() {
 
       {ready && view === "discover" && (
         <div className="layout single">
-          <Discover currency={currency} onOpen={openGame} onSearch={goSearch} onOpenList={goList} />
+          <Discover gameCount={meta.gameCount} currency={currency} onOpen={openGame} onSearch={goSearch} onOpenList={goList} />
         </div>
       )}
 
@@ -287,7 +298,7 @@ export function App() {
             </div>
             {tagSuggestions.length > 0 && (
               <div className="tag-suggest">
-                <span className="muted small">Filter by tag instead:</span>
+                <span className="muted small">Did you mean the tag?</span>
                 {tagSuggestions.map((t) => (
                   <button key={t.tag} className="facet" onClick={() => filterByTag(t.tag)}>
                     {t.tag} <span className="muted">{t.count.toLocaleString()}</span>
@@ -311,13 +322,12 @@ export function App() {
                 ))}
                 {response.total === 0 && (
                   <div className="empty">
+                    <Pixel art={SLIME} size={6} />
                     {view === "list" && !list.ids.length ? (
-                      <p className="muted">
-                        Your list is empty. Tap ☆ on any game to save it, or import your Steam wishlist above.
-                      </p>
+                      <p>Nothing saved yet. Press the star on any game to keep it here, or import your Steam wishlist above.</p>
                     ) : (
                       <>
-                        <p className="muted">No games match.</p>
+                        <p>No game matches all of that. Loosen a filter or two.</p>
                         {activeFilters > 0 && (
                           <button className="primary" onClick={() => update({ ...DEFAULT_QUERY, q: query.q, sort: query.sort })}>
                             Clear {activeFilters} filter{activeFilters > 1 ? "s" : ""}
@@ -330,13 +340,13 @@ export function App() {
                 {pages > 1 && (
                   <nav className="pager">
                     <button disabled={query.page <= 1} onClick={() => goToPage(query.page - 1)}>
-                      ← Prev
+                      Previous
                     </button>
                     <span>
                       Page {query.page} of {pages.toLocaleString()}
                     </span>
                     <button disabled={query.page >= pages} onClick={() => goToPage(query.page + 1)}>
-                      Next →
+                      Next
                     </button>
                   </nav>
                 )}
@@ -358,11 +368,15 @@ export function App() {
       )}
 
       {meta?.updatedAt && (
-        <footer className="muted small">
-          Catalogue updated {new Date(meta.updatedAt).toLocaleString()} ·{" "}
-          {Object.entries(meta.storeCounts)
-            .map(([s, n]) => `${s}: ${n.toLocaleString()}`)
-            .join(" · ")}
+        <footer>
+          <p>
+            Catalogue read on {new Date(meta.updatedAt).toLocaleString(undefined, { dateStyle: "long", timeStyle: "short" })}:{" "}
+            {Object.entries(meta.storeCounts)
+              .map(([s, n]) => `${n.toLocaleString()} games on ${STORE_NAMES[s as keyof typeof STORE_NAMES] ?? s}`)
+              .join(", ")}
+            .
+          </p>
+          <p>Prices from other shops come from CheapShark, in US dollars.</p>
         </footer>
       )}
 

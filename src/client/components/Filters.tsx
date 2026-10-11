@@ -158,7 +158,7 @@ export function Filters({ query, allTags, response, currency, onChange }: Props)
         />
         {facets.length > 0 && (
           <div className="facets">
-            <div className="muted small">In these results (click to add, right-click to exclude)</div>
+            <div className="muted small">Common in these results. Click to add, right-click to exclude.</div>
             {facets.slice(0, 24).map((f) => (
               <button
                 key={f.tag}
