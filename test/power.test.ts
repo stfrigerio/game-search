@@ -80,14 +80,21 @@ describe("levelFromSpecs", () => {
     expect(both(["4 GB RAM", "1GB dedicated VRAM or better"], ["8 GB RAM", "4GB dedicated VRAM"], { year: 2006 })).toBe(1);
   });
 
-  it("reads a vague card next to a lot of memory as medium", () => {
-    expect(both(["8 GB RAM", "Video card must be 1 GB or more"], null, { year: 2012 })).toBe(2);
+  it("does not lift a game out of light on video memory alone", () => {
+    expect(both(["8 GB RAM", "Video card must be 1 GB or more"], null, { year: 2012 })).toBe(1);
+    expect(both(["4 GB RAM", "1GB VRAM / DirectX 10+ support"], ["8 GB RAM", "2GB VRAM / DirectX 10+ support"], { year: 2020 })).toBe(1);
+  });
+
+  it("reads cards written with only the maker's name", () => {
+    expect(gpuScores("2GB & AMD 7970 or nVidia 770 or greater")).toHaveLength(2);
   });
 
   it("never calls a recent open-world 3D game light, whatever card it claims to start on", () => {
     const subnautica: [[string, string], [string, string]] = [["4 GB RAM", "Intel HD 4600 or equivalent"], ["8 GB RAM", "Nvidia GTX 550 Ti or equivalent, 2GB VRAM"]];
     expect(both(...subnautica, { world3d: true, year: 2018 })).toBe(2);
     expect(both(...subnautica, { world3d: true, year: 2009 })).toBe(1);
+    // Don't Starve Together is tagged open world but starts on a 2010 office card.
+    expect(both(["1 GB RAM", "Radeon HD5450 or better; 256 MB or higher"], null, { world3d: true, year: 2016 })).toBe(1);
   });
 
   it("does not call a small game demanding for a cautious minimum or a round VRAM figure", () => {

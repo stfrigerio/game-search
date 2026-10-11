@@ -70,7 +70,7 @@ export function gpuScores(line: string): number[] {
     const base = n >= 5000 ? 15 : n >= 4000 ? 13 : n >= 3000 ? 11 : 8;
     return base * tier(n) * boosted(m[2]);
   });
-  take(/\b(?:gtx?|gts|geforce)\s*-?(\d{3,4})(?!\d)\s*(ti|super)?/gi, (m) => {
+  take(/\b(?:gtx?|gts|geforce|nvidia)\s*-?(\d{3,4})(?!\d)\s*(ti|super)?/gi, (m) => {
     const n = Number(m[1]);
     if (n >= 6000) return n >= 8000 ? 0.5 : 0.25; // GeForce 6600 ... 9800
     if (n >= 1600) return 6.5 * tier(n) * boosted(m[2]);
@@ -92,7 +92,7 @@ export function gpuScores(line: string): number[] {
   take(/\br9\s*-?(?:fury|nano|(\d{3})(?!\d))/gi, (m) => (!m[1] ? 6 : Number(m[1]) % 100 >= 90 ? 5.2 : Number(m[1]) % 100 >= 80 ? 3.7 : 2.6));
   take(/\br7\s*-?\d{3}(?!\d)/gi, () => 2);
   take(/\br5\s*-?\d{3}(?!\d)/gi, () => 0.8);
-  take(/\b(?:radeon\s+)?hd\s*-?(\d{4})(?!\d)/gi, (m) => {
+  take(/\b(?:(?:radeon\s+)?hd|radeon|amd|ati)\s*-?(\d{4})(?!\d)/gi, (m) => {
     const n = Number(m[1]);
     const h = Math.floor((n % 1000) / 100);
     const base = n >= 7000 ? 1.6 : n >= 6000 ? 1.1 : n >= 5000 ? 0.9 : 0.5;
@@ -203,7 +203,6 @@ export interface PowerHints {
  *    "recommends" a GTX 950), so they stay light well above the usual line;
  *  - a recent open-world 3D game is never light, whatever card it claims to start on
  *    (Subnautica lists integrated graphics);
- *  - "any card with 1 GB" next to 8 GB of memory is a modern game being vague.
  * Memory otherwise only nudges, and disk space says nothing about power.
  */
 export function levelFromSpecs(s: Specs, hints: PowerHints = {}): PowerLevel | null {
@@ -216,12 +215,11 @@ export function levelFromSpecs(s: Specs, hints: PowerHints = {}): PowerLevel | n
     return null;
   }
   const modest = hints.flat || (hints.year != null && hints.year < 2012);
-  let level: number = want < (modest ? 3 : 1.2) ? 1 : want < 2.2 ? (modest ? 1 : 2) : want < 5 ? 2 : 3;
-  if (level === 1 && !modest) {
-    const noCardNamed = s.gpu === null && s.recGpu === null;
-    if (noCardNamed && s.ram !== null && s.ram >= 8) level = 2;
-    if (hints.world3d && hints.year != null && hints.year >= 2014) level = 2;
-  }
+  // "Any card with 1 GB" names no card at all: too vague to lift a game out of light by itself.
+  const noCardNamed = s.gpu === null && s.recGpu === null;
+  let level: number = want < (modest ? 3 : 1.2) ? 1 : want < 2.2 ? (modest || noCardNamed ? 1 : 2) : want < 5 ? 2 : 3;
+  // Not for a game that starts on a truly ancient card: that is a 2D game with an open-world tag.
+  if (level === 1 && !modest && hints.world3d && hints.year != null && hints.year >= 2014 && want >= 0.6) level = 2;
   if (s.ram !== null && s.ram >= 16 && level < 3) level++;
   return level as PowerLevel;
 }
