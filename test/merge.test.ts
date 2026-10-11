@@ -16,6 +16,12 @@ function game(store: StoreId, id: string, name: string, extra: Partial<Game> = {
     earlyAccess: false,
     platforms: { windows: true, mac: false, linux: false },
     deck: 0,
+    categories: [],
+    languages: [],
+    audioLanguages: [],
+    contentDescriptors: [],
+    peakPlayers: null,
+    owners: null,
     steamAppId: store === "steam" ? Number(id) : null,
     stores: [
       { store, storeGameId: id, url: "", price: 999, basePrice: 999, discountPct: 0, free: false, reviewCount: 10, reviewPct: 90 },

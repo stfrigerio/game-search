@@ -28,6 +28,13 @@ interface SteamItem {
   release?: { steam_release_date?: number; original_release_date?: number; is_coming_soon?: boolean };
   platforms?: { windows?: boolean; mac?: boolean; steamos_linux?: boolean; steam_deck_compat_category?: number };
   assets?: { header?: string };
+  categories?: {
+    supported_player_categoryids?: number[];
+    feature_categoryids?: number[];
+    controller_categoryids?: number[];
+  };
+  content_descriptorids?: number[];
+  supported_languages?: { elanguage: number; supported?: boolean; full_audio?: boolean; subtitles?: boolean }[];
   best_purchase_option?: {
     final_price_in_cents?: string;
     original_price_in_cents?: string;
@@ -47,6 +54,7 @@ const DATA_REQUEST = {
   include_reviews: true,
   include_platforms: true,
   include_assets: true,
+  include_supported_languages: true,
 };
 
 function queryUrl(start: number, country: string) {
@@ -76,6 +84,7 @@ export function steamItemToGame(item: SteamItem, tagNames: Map<number, string>):
   const release = item.release;
   const releaseDate = release?.steam_release_date || release?.original_release_date || null;
   const deck = item.platforms?.steam_deck_compat_category ?? 0;
+  const langs = item.supported_languages ?? [];
 
   return {
     id: `steam:${appid}`,
@@ -97,6 +106,17 @@ export function steamItemToGame(item: SteamItem, tagNames: Map<number, string>):
       linux: !!item.platforms?.steamos_linux,
     },
     deck: (deck >= 0 && deck <= 3 ? deck : 0) as DeckCompat,
+    categories: [
+      ...(item.categories?.supported_player_categoryids ?? []),
+      ...(item.categories?.feature_categoryids ?? []),
+      ...(item.categories?.controller_categoryids ?? []),
+    ],
+    // "Supported" here means interface or subtitles in that language.
+    languages: langs.filter((l) => l.supported || l.subtitles).map((l) => l.elanguage),
+    audioLanguages: langs.filter((l) => l.full_audio).map((l) => l.elanguage),
+    contentDescriptors: item.content_descriptorids ?? [],
+    peakPlayers: null,
+    owners: null,
     steamAppId: appid,
     stores: [
       {

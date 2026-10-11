@@ -2,13 +2,19 @@ import { Catalog } from "./catalog.ts";
 import { catalogConfig } from "./config.ts";
 
 // `npm run crawl`: rebuild the catalogue snapshot without starting the web server.
+// `npm run crawl -- --players`: only refresh player counts (SteamSpy).
 const catalog = new Catalog(catalogConfig);
 await catalog.load();
 const ticker = setInterval(() => {
   const { progress } = catalog.status();
   if (progress) console.log(progress);
 }, 5000);
-await catalog.refresh();
+if (process.argv.includes("--players")) {
+  // Only refresh player counts on the existing catalogue (`npm run crawl -- --players`).
+  await catalog.refreshPlayerCounts();
+} else {
+  await catalog.refresh();
+}
 clearInterval(ticker);
 
 const status = catalog.status();

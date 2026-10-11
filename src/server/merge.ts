@@ -57,6 +57,9 @@ function absorb(target: Game, other: Game) {
     mac: target.platforms.mac || other.platforms.mac,
     linux: target.platforms.linux || other.platforms.linux,
   };
+  target.categories = [...new Set([...target.categories, ...other.categories])];
+  if (!target.languages.length) target.languages = other.languages;
+  if (!target.audioLanguages.length) target.audioLanguages = other.audioLanguages;
   target.description ||= other.description;
   target.image ??= other.image;
   target.releaseDate ??= other.releaseDate;

@@ -16,8 +16,26 @@ across official stores and key resellers (G2A, Kinguin, Eneba, Instant Gaming, �
   so a 100% game with 3 reviews doesn't beat a 97% game with 300k.
 - **"Best deals" sorting**: discount weighted by quality, so 50% off a great game beats
   90% off a bad one.
-- Filters for review score and count, price range, on sale, free, release years, upcoming,
-  early access, Windows/macOS/Linux, Steam Deck compatibility and store.
+- **Lots of filters, each with live counts** of how many results have it:
+  - **Reviews**: % positive and number of reviews (min and max, for hidden gems)
+  - **Players**: how many are playing now (Steam peak yesterday, via SteamSpy) and game
+    modes: single-player, multiplayer, co-op, online / local split-screen / LAN co-op,
+    PvP, MMO, cross-platform, Remote Play Together
+  - **Price**: range, on sale, minimum discount, free / not free
+  - **Release**: last 30 days … 5 years, year range, upcoming, early access
+  - **Platform & controls**: Windows/macOS/Linux, Steam Deck, full/any controller
+    support, VR
+  - **Language**: interface/subtitles or full audio in any of Steam's 30 languages
+  - **Features**: achievements, cloud saves, Workshop mods, trading cards, level editor,
+    Family Sharing, HDR, and *no in-app purchases*
+  - **Accessibility**: adjustable difficulty, save anytime, subtitle options,
+    colour-blind modes, no timed input, keyboard-only, text size
+  - **Hide content**: sexual content, gore, general mature content
+  - Store and developer/publisher (click a developer name)
+  - Every feature can be required or excluded; active filters show as removable chips,
+    and common ones are one tap away (Co-op, On sale, Deck Verified, Popular now, …).
+- Sort by relevance, rating, most reviewed, **most played now**, newest, price, best
+  deal or biggest discount.
 - **Similar games** on every game page, from shared *distinctive* tags (sharing
   "Metroidvania" counts, sharing "Indie" barely does) and rating.
 - A **Discover** page with shelves: best deals right now, hidden gems (95%+ but under
@@ -44,7 +62,7 @@ Needs Node 20+.
 
 ```sh
 npm install
-npm run crawl   # build the catalogue (~2 minutes, written to data/catalog.json.gz)
+npm run crawl   # build the catalogue (~7 minutes, written to data/catalog.json.gz)
 npm run dev     # API on :3001, UI on http://localhost:5173
 ```
 
@@ -77,6 +95,7 @@ loaded. Peaks during a re-crawl are higher.
 | `REFRESH_HOURS`  | `24`                   | Re-crawl interval                                         |
 | `DATA_FILE`      | `data/catalog.json.gz` | Where the catalogue snapshot is stored                    |
 | `CRAWL_LIMIT`    | unset                  | Cap games per store, for fast local experiments (`5000`)  |
+| `SKIP_STEAMSPY`  | unset                  | `1` skips the ~5 min SteamSpy player-count crawl          |
 
 E.g. `STORE_COUNTRY=IT STORE_CURRENCY=EUR npm run crawl` for Italian euro prices.
 CheapShark comparison prices are always in USD.
@@ -85,11 +104,12 @@ CheapShark comparison prices are always in USD.
 
 ```
 src/
-  shared/          types + search-query <-> URL params (used by client and server)
+  shared/          types, filter definitions (features.ts) and search-query <-> URL params
   server/
     sources/       one crawler per store; add new stores here
       steam.ts     Steam's store query API (no API key needed)
       gog.ts       GOG's catalogue API (no API key needed)
+      steamspy.ts  player counts and owner estimates (slow, polite crawl)
     merge.ts       folds the same game from different stores into one entry
     search.ts      in-memory index: MiniSearch for text, then filters, sort, facets
     catalog.ts     crawl → merge → index, snapshot to disk, periodic refresh

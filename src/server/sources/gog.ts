@@ -1,6 +1,7 @@
 import type { Game } from "../../shared/types.ts";
 import { fetchJson, mapLimit } from "../http.ts";
 import type { CrawlOptions } from "./index.ts";
+import { GOG_FEATURE_CATEGORIES } from "../../shared/features.ts";
 
 // GOG's public catalogue API (what gog.com/games uses). No key needed.
 const PAGE_SIZE = 100;
@@ -14,6 +15,7 @@ interface GogProduct {
   slug: string;
   title: string;
   productState?: string;
+  features?: { slug: string }[];
   releaseDate?: string | null;
   coverHorizontal?: string | null;
   developers?: string[];
@@ -80,6 +82,12 @@ export function gogProductToGame(p: GogProduct): Game | null {
     earlyAccess: state.includes("in-development") || state.includes("early-access"),
     platforms: { windows: os.has("windows"), mac: os.has("osx") || os.has("mac"), linux: os.has("linux") },
     deck: 0,
+    categories: [...new Set((p.features ?? []).flatMap((f) => GOG_FEATURE_CATEGORIES[f.slug] ?? []))],
+    languages: [],
+    audioLanguages: [],
+    contentDescriptors: [],
+    peakPlayers: null,
+    owners: null,
     steamAppId: null,
     stores: [
       {

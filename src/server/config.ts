@@ -12,6 +12,7 @@ export const config = {
   refreshHours: Number(env.REFRESH_HOURS ?? 24),
   /** Cap the crawl for quick local experiments, e.g. CRAWL_LIMIT=5000. */
   crawlLimit: env.CRAWL_LIMIT ? Number(env.CRAWL_LIMIT) : undefined,
+  skipSteamSpy: env.SKIP_STEAMSPY === "1",
 };
 
 export const catalogConfig = {
@@ -20,4 +21,5 @@ export const catalogConfig = {
   currency: config.currency,
   maxAgeMs: config.refreshHours * 3600_000,
   limit: config.crawlLimit,
+  skipSteamSpy: config.skipSteamSpy,
 };

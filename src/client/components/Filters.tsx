@@ -1,14 +1,53 @@
+import type { ReactNode } from "react";
+import { CONTENT_FILTERS, FEATURES, LANGUAGES, type FeatureGroup, type FeatureKey } from "../../shared/features.ts";
 import { DEFAULT_QUERY, type SearchQuery, type Tristate } from "../../shared/query.ts";
-import type { StoreId } from "../../shared/types.ts";
-import { STORE_NAMES } from "../format.ts";
+import type { SearchResponse, StoreId } from "../../shared/types.ts";
+import { formatCount, STORE_NAMES } from "../format.ts";
 import { TagPicker } from "./TagPicker.tsx";
 
 interface Props {
   query: SearchQuery;
   allTags: { tag: string; count: number }[];
-  facets: { tag: string; count: number }[];
+  response: SearchResponse | null;
   currency: string;
   onChange: (patch: Partial<SearchQuery>) => void;
+}
+
+/** A collapsible filter section; opens by default when it has an active filter. */
+function Section({ title, active, defaultOpen, children }: { title: string; active: number; defaultOpen?: boolean; children: ReactNode }) {
+  return (
+    <details className="filter-section" open={defaultOpen || active > 0}>
+      <summary>
+        {title}
+        {active > 0 && <span className="active-count">{active}</span>}
+      </summary>
+      <div className="filter-body">{children}</div>
+    </details>
+  );
+}
+
+/** One-tap preset buttons; tapping the active one clears it. */
+function Presets<T>({
+  options,
+  isActive,
+  onPick,
+}: {
+  options: { label: string; value: T }[];
+  isActive: (v: T) => boolean;
+  onPick: (v: T | null) => void;
+}) {
+  return (
+    <div className="presets">
+      {options.map((o) => {
+        const active = isActive(o.value);
+        return (
+          <button key={o.label} className={`preset ${active ? "on" : ""}`} onClick={() => onPick(active ? null : o.value)}>
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function NumberInput({
@@ -47,23 +86,68 @@ function TristateSelect({ value, onChange, labels }: { value: Tristate; onChange
   );
 }
 
-const REVIEW_PRESETS = [
-  { label: "Any", minReviews: null, minPct: null },
-  { label: "Mostly positive+", minReviews: 10, minPct: 70 },
-  { label: "Very positive+", minReviews: 50, minPct: 80 },
-  { label: "Overwhelmingly positive", minReviews: 500, minPct: 95 },
-] as const;
+/**
+ * A feature row cycles: off → required (✓) → excluded (✕) → off.
+ * The count is how many current results have the feature.
+ */
+function FeatureList({
+  group,
+  query,
+  counts,
+  onChange,
+}: {
+  group: FeatureGroup;
+  query: SearchQuery;
+  counts: Record<string, number> | undefined;
+  onChange: (patch: Partial<SearchQuery>) => void;
+}) {
+  const cycle = (key: FeatureKey) => {
+    const features = query.features.filter((f) => f !== key);
+    const notFeatures = query.notFeatures.filter((f) => f !== key);
+    if (query.features.includes(key)) onChange({ features, notFeatures: [...notFeatures, key] });
+    else if (query.notFeatures.includes(key)) onChange({ features, notFeatures });
+    else onChange({ features: [...features, key], notFeatures });
+  };
+  return (
+    <ul className="feature-list">
+      {FEATURES.filter((f) => f.group === group).map((f) => {
+        const state = query.features.includes(f.key) ? "on" : query.notFeatures.includes(f.key) ? "off" : "";
+        const count = counts?.[f.key];
+        return (
+          <li key={f.key}>
+            <button
+              className={`feature ${state} ${count === 0 && !state ? "empty" : ""}`}
+              onClick={() => cycle(f.key)}
+              title={state === "on" ? "Required. Click to exclude instead" : state === "off" ? "Excluded. Click to clear" : "Click to require"}
+            >
+              <span className="box">{state === "on" ? "✓" : state === "off" ? "✕" : ""}</span>
+              <span className="feature-label">{f.label}</span>
+              {count !== undefined && !state && <span className="muted count">{formatCount(count)}</span>}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
-export function Filters({ query, allTags, facets, currency, onChange }: Props) {
+const year = new Date().getFullYear();
+const countFeatures = (q: SearchQuery, group: FeatureGroup) =>
+  [...q.features, ...q.notFeatures].filter((k) => FEATURES.find((f) => f.key === k)?.group === group).length;
+const isSet = (...values: unknown[]) =>
+  values.filter((v) => v !== null && v !== false && v !== "" && !(Array.isArray(v) && !v.length)).length;
+
+export function Filters({ query, allTags, response, currency, onChange }: Props) {
   const toggle = <T,>(list: T[], item: T) => (list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
   const removeTag = (t: string) =>
     onChange({ tags: query.tags.filter((x) => x !== t), notTags: query.notTags.filter((x) => x !== t) });
-  const preset = REVIEW_PRESETS.findIndex((p) => p.minReviews === query.minReviews && p.minPct === query.minPct);
+  const facets = response?.tagFacets ?? [];
+  const counts = response?.featureCounts;
+  const sym = currency === "USD" ? "$" : currency === "EUR" ? "€" : currency === "GBP" ? "£" : "";
 
   return (
     <aside className="filters">
-      <section>
-        <h3>Tags</h3>
+      <Section title="Tags" active={query.tags.length + query.notTags.length} defaultOpen>
         <TagPicker
           allTags={allTags}
           included={query.tags}
@@ -74,7 +158,7 @@ export function Filters({ query, allTags, facets, currency, onChange }: Props) {
         />
         {facets.length > 0 && (
           <div className="facets">
-            <div className="muted small">Narrow down (click to add, right-click to exclude)</div>
+            <div className="muted small">In these results (click to add, right-click to exclude)</div>
             {facets.slice(0, 24).map((f) => (
               <button
                 key={f.tag}
@@ -85,43 +169,63 @@ export function Filters({ query, allTags, facets, currency, onChange }: Props) {
                   if (!query.notTags.includes(f.tag)) onChange({ notTags: [...query.notTags, f.tag] });
                 }}
               >
-                {f.tag} <span className="muted">{f.count.toLocaleString()}</span>
+                {f.tag} <span className="muted">{formatCount(f.count)}</span>
               </button>
             ))}
           </div>
         )}
-      </section>
+      </Section>
 
-      <section>
-        <h3>Reviews</h3>
-        <select
-          value={preset}
-          onChange={(e) => {
-            const p = REVIEW_PRESETS[Number(e.target.value)];
-            if (p) onChange({ minReviews: p.minReviews, minPct: p.minPct });
-          }}
-        >
-          {REVIEW_PRESETS.map((p, i) => (
-            <option key={p.label} value={i}>
-              {p.label}
-            </option>
-          ))}
-          {preset === -1 && <option value={-1}>Custom</option>}
-        </select>
-        <div className="row">
+      <Section title="Reviews" active={isSet(query.minPct, query.minReviews, query.maxReviews)} defaultOpen>
+        <div className="muted small">Positive reviews</div>
+        <Presets
+          options={[70, 80, 90, 95].map((v) => ({ label: `${v}%+`, value: v }))}
+          isActive={(v) => query.minPct === v}
+          onPick={(v) => onChange({ minPct: v })}
+        />
+        <div className="muted small">Number of reviews</div>
+        <Presets
+          options={[10, 100, 1000, 10000, 100000].map((v) => ({ label: `${formatCount(v)}+`, value: v }))}
+          isActive={(v) => query.minReviews === v}
+          onPick={(v) => onChange({ minReviews: v })}
+        />
+        <div className="row3">
+          <label>
+            Min %
+            <NumberInput value={query.minPct} min={0} max={100} placeholder="0" onChange={(v) => onChange({ minPct: v })} />
+          </label>
           <label>
             Min reviews
             <NumberInput value={query.minReviews} min={0} placeholder="0" onChange={(v) => onChange({ minReviews: v })} />
           </label>
           <label>
-            Min % positive
-            <NumberInput value={query.minPct} min={0} max={100} placeholder="0" onChange={(v) => onChange({ minPct: v })} />
+            Max reviews
+            <NumberInput value={query.maxReviews} min={0} placeholder="any" onChange={(v) => onChange({ maxReviews: v })} />
           </label>
         </div>
-      </section>
+      </Section>
 
-      <section>
-        <h3>Price ({currency})</h3>
+      <Section title="Players" active={countFeatures(query, "players") + isSet(query.minPlayers)} defaultOpen>
+        <div className="muted small">Playing right now (Steam peak yesterday)</div>
+        <Presets
+          options={[10, 100, 1000, 10000, 100000].map((v) => ({ label: `${formatCount(v)}+`, value: v }))}
+          isActive={(v) => query.minPlayers === v}
+          onPick={(v) => onChange({ minPlayers: v })}
+        />
+        <div className="muted small">Game modes</div>
+        <FeatureList group="players" query={query} counts={counts} onChange={onChange} />
+      </Section>
+
+      <Section
+        title={`Price${currency ? ` (${currency})` : ""}`}
+        active={isSet(query.minPrice, query.maxPrice, query.discounted, query.minDiscount) + (query.free !== DEFAULT_QUERY.free ? 1 : 0)}
+        defaultOpen
+      >
+        <Presets
+          options={[5, 10, 20, 30].map((v) => ({ label: `Under ${sym}${v}`, value: v }))}
+          isActive={(v) => query.maxPrice === v && query.minPrice === null}
+          onPick={(v) => onChange({ maxPrice: v, minPrice: null })}
+        />
         <div className="row">
           <label>
             Min
@@ -132,18 +236,41 @@ export function Filters({ query, allTags, facets, currency, onChange }: Props) {
             <NumberInput value={query.maxPrice} min={0} placeholder="any" onChange={(v) => onChange({ maxPrice: v })} />
           </label>
         </div>
-        <label className="check">
-          <input type="checkbox" checked={query.discounted} onChange={(e) => onChange({ discounted: e.target.checked })} />
-          On sale
-        </label>
+        <div className="muted small">Discount</div>
+        <Presets
+          options={[
+            { label: "On sale", value: 1 },
+            ...[25, 50, 75, 90].map((v) => ({ label: `${v}%+`, value: v })),
+          ]}
+          isActive={(v) => (v === 1 ? query.discounted && !query.minDiscount : query.minDiscount === v)}
+          onPick={(v) =>
+            onChange(v === null ? { discounted: false, minDiscount: null } : { discounted: true, minDiscount: v === 1 ? null : v })
+          }
+        />
         <label>
           Free games
           <TristateSelect value={query.free} onChange={(free) => onChange({ free })} labels={["Show", "Hide", "Only free"]} />
         </label>
-      </section>
+      </Section>
 
-      <section>
-        <h3>Release</h3>
+      <Section
+        title="Release"
+        active={
+          isSet(query.minYear, query.maxYear, query.days) +
+          (query.upcoming !== DEFAULT_QUERY.upcoming ? 1 : 0) +
+          (query.earlyAccess !== DEFAULT_QUERY.earlyAccess ? 1 : 0)
+        }
+      >
+        <Presets
+          options={[
+            { label: "Last 30 days", value: 30 },
+            { label: "3 months", value: 90 },
+            { label: "1 year", value: 365 },
+            { label: "5 years", value: 1826 },
+          ]}
+          isActive={(v) => query.days === v}
+          onPick={(v) => onChange({ days: v })}
+        />
         <div className="row">
           <label>
             From year
@@ -151,7 +278,7 @@ export function Filters({ query, allTags, facets, currency, onChange }: Props) {
           </label>
           <label>
             To year
-            <NumberInput value={query.maxYear} placeholder="now" onChange={(v) => onChange({ maxYear: v })} />
+            <NumberInput value={query.maxYear} placeholder={String(year)} onChange={(v) => onChange({ maxYear: v })} />
           </label>
         </div>
         <label>
@@ -160,26 +287,19 @@ export function Filters({ query, allTags, facets, currency, onChange }: Props) {
         </label>
         <label>
           Early access
-          <TristateSelect
-            value={query.earlyAccess}
-            onChange={(earlyAccess) => onChange({ earlyAccess })}
-            labels={["Show", "Hide", "Only early access"]}
-          />
+          <TristateSelect value={query.earlyAccess} onChange={(earlyAccess) => onChange({ earlyAccess })} labels={["Show", "Hide", "Only early access"]} />
         </label>
-      </section>
+      </Section>
 
-      <section>
-        <h3>Platform</h3>
-        {(["windows", "mac", "linux"] as const).map((p) => (
-          <label key={p} className="check">
-            <input
-              type="checkbox"
-              checked={query.platforms.includes(p)}
-              onChange={() => onChange({ platforms: toggle(query.platforms, p) })}
-            />
-            {p === "mac" ? "macOS" : p[0].toUpperCase() + p.slice(1)}
-          </label>
-        ))}
+      <Section title="Platform & controls" active={query.platforms.length + (query.deck ? 1 : 0) + countFeatures(query, "controls")}>
+        <div className="checks-row">
+          {(["windows", "mac", "linux"] as const).map((p) => (
+            <label key={p} className="check">
+              <input type="checkbox" checked={query.platforms.includes(p)} onChange={() => onChange({ platforms: toggle(query.platforms, p) })} />
+              {p === "mac" ? "macOS" : p[0].toUpperCase() + p.slice(1)}
+            </label>
+          ))}
+        </div>
         <label>
           Steam Deck
           <select value={query.deck} onChange={(e) => onChange({ deck: Number(e.target.value) as SearchQuery["deck"] })}>
@@ -188,21 +308,51 @@ export function Filters({ query, allTags, facets, currency, onChange }: Props) {
             <option value={3}>Verified only</option>
           </select>
         </label>
-      </section>
+        <FeatureList group="controls" query={query} counts={counts} onChange={onChange} />
+      </Section>
 
-      <section>
-        <h3>Store</h3>
+      <Section title="Language" active={query.lang ? 1 : 0}>
+        <select value={query.lang ?? ""} onChange={(e) => onChange({ lang: e.target.value || null })}>
+          <option value="">Any language</option>
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.name}
+              {response && l.code !== query.lang ? ` (${formatCount(response.languageCounts[l.code] ?? 0)})` : ""}
+            </option>
+          ))}
+        </select>
+        <label className="check">
+          <input type="checkbox" checked={query.audio} onChange={(e) => onChange({ audio: e.target.checked })} />
+          Full audio (voices) in this language
+        </label>
+        <p className="muted small">Language data comes from Steam; GOG-only games have none.</p>
+      </Section>
+
+      <Section title="Features" active={countFeatures(query, "features")}>
+        <FeatureList group="features" query={query} counts={counts} onChange={onChange} />
+      </Section>
+
+      <Section title="Accessibility" active={countFeatures(query, "accessibility")}>
+        <FeatureList group="accessibility" query={query} counts={counts} onChange={onChange} />
+      </Section>
+
+      <Section title="Hide content" active={query.hide.length}>
+        {CONTENT_FILTERS.map((c) => (
+          <label key={c.key} className="check">
+            <input type="checkbox" checked={query.hide.includes(c.key)} onChange={() => onChange({ hide: toggle(query.hide, c.key) })} />
+            {c.label}
+          </label>
+        ))}
+      </Section>
+
+      <Section title="Store" active={query.stores.length}>
         {(Object.keys(STORE_NAMES) as StoreId[]).map((s) => (
           <label key={s} className="check">
             <input type="checkbox" checked={query.stores.includes(s)} onChange={() => onChange({ stores: toggle(query.stores, s) })} />
             {STORE_NAMES[s]}
           </label>
         ))}
-      </section>
-
-      <button className="link-button" onClick={() => onChange({ ...DEFAULT_QUERY, q: query.q, sort: query.sort })}>
-        Reset filters
-      </button>
+      </Section>
     </aside>
   );
 }

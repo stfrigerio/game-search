@@ -1,4 +1,5 @@
 import MiniSearch from "minisearch";
+import { CONTENT_FILTERS, FEATURES, LANGUAGES, LANGUAGE_BY_CODE, type FeatureKey } from "../shared/features.ts";
 import type { SearchQuery } from "../shared/query.ts";
 import type { Game, GameSummary, SearchResponse, StoreListing } from "../shared/types.ts";
 import { titleKey } from "./merge.ts";
@@ -49,6 +50,7 @@ export function summarize(game: Game): GameSummary {
     bestDiscountPct: best?.discountPct ?? 0,
     bestDiscountEnds: best?.discountPct ? (best.discountEnds ?? null) : null,
     bestStore: best?.store ?? null,
+    peakPlayers: game.peakPlayers ?? null,
     free: game.stores.some((s) => s.free),
     stores: game.stores.map((s) => s.store),
   };
@@ -76,6 +78,73 @@ function internStrings(games: Game[]) {
 }
 const yearOf = (ts: number | null) => (ts ? new Date(ts * 1000).getUTCFullYear() : null);
 
+/** The `k` items with the highest `keys[i]`, best first (min-heap of size k). */
+export function topK(items: number[], keys: Float64Array, k: number): number[] {
+  const heap = new Int32Array(Math.min(k, items.length));
+  let size = 0;
+  const less = (a: number, b: number) => keys[heap[a]] < keys[heap[b]];
+  const swap = (a: number, b: number) => {
+    const t = heap[a];
+    heap[a] = heap[b];
+    heap[b] = t;
+  };
+  const siftDown = (i: number) => {
+    for (;;) {
+      const l = 2 * i + 1;
+      const r = l + 1;
+      let m = i;
+      if (l < size && less(l, m)) m = l;
+      if (r < size && less(r, m)) m = r;
+      if (m === i) return;
+      swap(i, m);
+      i = m;
+    }
+  };
+  for (const item of items) {
+    if (size < heap.length) {
+      heap[size] = item;
+      for (let i = size++; i > 0; ) {
+        const parent = (i - 1) >> 1;
+        if (!less(i, parent)) break;
+        swap(i, parent);
+        i = parent;
+      }
+    } else if (size > 0 && keys[item] > keys[heap[0]]) {
+      heap[0] = item;
+      siftDown(0);
+    }
+  }
+  return Array.from(heap.subarray(0, size)).sort((a, b) => keys[b] - keys[a]);
+}
+
+const tri = (mode: SearchQuery["free"], value: boolean) => mode === "include" || (mode === "only" ? value : !value);
+
+interface Masks {
+  features: number;
+  notFeatures: number;
+  lang: number;
+  audio: number;
+  hide: number;
+  releasedAfter: number | null;
+  dev: string;
+}
+
+function buildMasks(q: SearchQuery): Masks {
+  const featureMask = (keys: string[]) =>
+    FEATURES.reduce((m, f, bit) => (keys.includes(f.key) ? m | (1 << bit) : m), 0) >>> 0;
+  const lang = q.lang ? LANGUAGE_BY_CODE.get(q.lang) : undefined;
+  const langBit = lang ? (1 << lang.id) >>> 0 : 0;
+  return {
+    features: featureMask(q.features),
+    notFeatures: featureMask(q.notFeatures),
+    lang: q.audio ? 0 : langBit,
+    audio: q.audio ? langBit : 0,
+    hide: CONTENT_FILTERS.reduce((m, c, bit) => (q.hide.includes(c.key) ? m | (1 << bit) : m), 0),
+    releasedAfter: q.days !== null ? Math.floor(Date.now() / 1000) - q.days * 86400 : null,
+    dev: lower(q.dev.trim()),
+  };
+}
+
 export class SearchIndex {
   readonly games: Game[];
   private readonly summaries: GameSummary[];
@@ -90,6 +159,13 @@ export class SearchIndex {
   /** Developer/publisher names are indexed once each; `peopleGames` maps a name back to its games. */
   private readonly people: MiniSearch<{ i: number; name: string }>;
   private readonly peopleGames: number[][] = [];
+  /** Bit i set = game has FEATURES[i]. */
+  private readonly featureMasks: Uint32Array;
+  /** Bit = Steam ELanguage id; interface/subtitles and full audio. */
+  private readonly langMasks: Uint32Array;
+  private readonly audioMasks: Uint32Array;
+  /** Bit i set = game has CONTENT_FILTERS[i] content. */
+  private readonly contentMasks: Uint8Array;
   /** Discount weighted by quality: a 50% cut on a great game beats 90% off a bad one. */
   private readonly dealScores: Float32Array;
   /** tag id -> indices of games carrying it, and the tag's rank on each, for similar-game lookups. */
@@ -107,6 +183,25 @@ export class SearchIndex {
     this.byId = new Map(games.map((g, i) => [g.id, i]));
 
     this.gameTags = games.map((g) => Uint16Array.from(g.tags, (t) => this.tagId(t)));
+
+    const categoryBits = new Map<number, number>();
+    FEATURES.forEach((f, bit) => {
+      for (const c of f.categories) categoryBits.set(c, (categoryBits.get(c) ?? 0) | (1 << bit));
+    });
+    const descriptorBits = new Map<number, number>();
+    CONTENT_FILTERS.forEach((c, bit) => {
+      for (const d of c.descriptors) descriptorBits.set(d, (descriptorBits.get(d) ?? 0) | (1 << bit));
+    });
+    const orBits = (ids: number[] | undefined, bits: (id: number) => number) => {
+      let mask = 0;
+      for (const id of ids ?? []) mask |= bits(id);
+      return mask >>> 0;
+    };
+    const langBit = (id: number) => (id >= 0 && id < 32 ? 1 << id : 0);
+    this.featureMasks = Uint32Array.from(games, (g) => orBits(g.categories, (c) => categoryBits.get(c) ?? 0));
+    this.langMasks = Uint32Array.from(games, (g) => orBits(g.languages, langBit));
+    this.audioMasks = Uint32Array.from(games, (g) => orBits(g.audioLanguages, langBit));
+    this.contentMasks = Uint8Array.from(games, (g) => orBits(g.contentDescriptors, (d) => descriptorBits.get(d) ?? 0));
     const counts = new Uint32Array(this.tagNames.length);
     for (const ids of this.gameTags) for (const id of ids) counts[id]++;
     this.allTags = this.tagNames.map((tag, id) => ({ tag, count: counts[id] })).sort((a, b) => b.count - a.count);
@@ -150,9 +245,19 @@ export class SearchIndex {
     return id;
   }
 
-  get(id: string): { game: Game; summary: GameSummary } | null {
+  get(id: string): { game: Game; summary: GameSummary; features: FeatureKey[]; languages: { code: string; audio: boolean }[] } | null {
     const i = this.byId.get(id);
-    return i === undefined ? null : { game: this.games[i], summary: this.summaries[i] };
+    if (i === undefined) return null;
+    const fm = this.featureMasks[i];
+    return {
+      game: this.games[i],
+      summary: this.summaries[i],
+      features: FEATURES.filter((_, bit) => (fm & (1 << bit)) !== 0).map((f) => f.key),
+      languages: LANGUAGES.filter((l) => (this.langMasks[i] & (1 << l.id)) !== 0).map((l) => ({
+        code: l.code,
+        audio: (this.audioMasks[i] & (1 << l.id)) !== 0,
+      })),
+    };
   }
 
   /** Indices of games matching the text query (title, developer or publisher), best first. */
@@ -197,12 +302,24 @@ export class SearchIndex {
     return [...combined].sort((a, b) => b[1] - a[1]).map(([i]) => i);
   }
 
-  private matchesFilters(i: number, q: SearchQuery, tags: number[], notTags: number[]): boolean {
+  private matchesFilters(i: number, q: SearchQuery, tags: number[], notTags: number[], m: Masks): boolean {
     const g = this.games[i];
     const s = this.summaries[i];
     const gameTags = this.gameTags[i];
     for (const t of tags) if (!gameTags.includes(t)) return false;
     for (const t of notTags) if (gameTags.includes(t)) return false;
+
+    if (m.features && (this.featureMasks[i] & m.features) >>> 0 !== m.features) return false;
+    if (m.notFeatures && (this.featureMasks[i] & m.notFeatures) !== 0) return false;
+    if (m.lang && (this.langMasks[i] & m.lang) === 0) return false;
+    if (m.audio && (this.audioMasks[i] & m.audio) === 0) return false;
+    if (m.hide && (this.contentMasks[i] & m.hide) !== 0) return false;
+    if (q.minPlayers !== null && (g.peakPlayers ?? 0) < q.minPlayers) return false;
+    if (q.minDiscount !== null && s.bestDiscountPct < q.minDiscount) return false;
+    if (m.releasedAfter !== null && (g.comingSoon || !g.releaseDate || g.releaseDate < m.releasedAfter)) return false;
+    if (m.dev && !g.developers.some((d) => lower(d) === m.dev) && !g.publishers.some((d) => lower(d) === m.dev)) {
+      return false;
+    }
 
     if (q.minReviews !== null && s.reviewCount < q.minReviews) return false;
     if (q.maxReviews !== null && s.reviewCount > q.maxReviews) return false;
@@ -218,8 +335,6 @@ export class SearchIndex {
       if (q.maxYear !== null && y > q.maxYear) return false;
     }
 
-    const tri = (mode: SearchQuery["free"], value: boolean) =>
-      mode === "include" || (mode === "only" ? value : !value);
     if (!tri(q.free, s.free) || !tri(q.earlyAccess, g.earlyAccess) || !tri(q.upcoming, g.comingSoon)) return false;
 
     for (const p of q.platforms) if (!g.platforms[p]) return false;
@@ -228,39 +343,64 @@ export class SearchIndex {
     return true;
   }
 
-  private comparator(sort: SearchQuery["sort"]): ((a: number, b: number) => number) | null {
+  private readonly sortKeys = new Map<SearchQuery["sort"], Float64Array>();
+
+  /**
+   * One number per game for a sort order, higher first: the primary key scaled up
+   * plus a tie-breaker (usually review count, always < 1e8). Built on first use;
+   * comparing two floats is much faster than reading fields off summary objects.
+   */
+  private sortKey(sort: Exclude<SearchQuery["sort"], "relevance">): Float64Array {
+    const cached = this.sortKeys.get(sort);
+    if (cached) return cached;
     const s = this.summaries;
     const g = this.games;
-    // Unknown values (no price, no date) always sort last.
-    const nullsLast = (x: number | null, y: number | null, dir: 1 | -1) =>
-      x === null ? (y === null ? 0 : 1) : y === null ? -1 : (x - y) * dir;
+    const LAST = -1e300; // unknown values (no price, no date) sort last either way
+    const reviews = (i: number) => Math.min(s[i].reviewCount, 99_999_999);
+    let key: (i: number) => number;
     switch (sort) {
-      case "relevance":
-        return null;
       case "rating":
-        return (a, b) => s[b].rating - s[a].rating || s[b].reviewCount - s[a].reviewCount;
+        key = (i) => s[i].rating * 1e8 + reviews(i);
+        break;
       case "reviews":
-        return (a, b) => s[b].reviewCount - s[a].reviewCount;
+        key = reviews;
+        break;
+      case "players":
+        key = (i) => (s[i].peakPlayers ?? 0) * 1e8 + reviews(i);
+        break;
       case "newest":
-        return (a, b) => nullsLast(g[a].releaseDate, g[b].releaseDate, -1);
+        key = (i) => g[i].releaseDate ?? LAST;
+        break;
       case "oldest":
-        return (a, b) => nullsLast(g[a].releaseDate, g[b].releaseDate, 1);
+        key = (i) => (g[i].releaseDate ? -g[i].releaseDate! : LAST);
+        break;
       case "priceAsc":
-        return (a, b) => nullsLast(s[a].bestPrice, s[b].bestPrice, 1) || s[b].reviewCount - s[a].reviewCount;
+        key = (i) => (s[i].bestPrice === null ? LAST : -s[i].bestPrice! * 1e8 + reviews(i));
+        break;
       case "priceDesc":
-        return (a, b) => nullsLast(s[a].bestPrice, s[b].bestPrice, -1);
+        key = (i) => s[i].bestPrice ?? LAST;
+        break;
       case "discount":
-        return (a, b) => s[b].bestDiscountPct - s[a].bestDiscountPct || s[b].reviewCount - s[a].reviewCount;
-      case "deal": {
-        const score = this.dealScores;
-        return (a, b) => score[b] - score[a] || s[b].reviewCount - s[a].reviewCount;
-      }
+        key = (i) => s[i].bestDiscountPct * 1e8 + reviews(i);
+        break;
+      case "deal":
+        key = (i) => Math.round(this.dealScores[i]) * 1e8 + reviews(i);
+        break;
       case "name": {
-        const n = this.sortNames;
-        return (a, b) => (n[a] < n[b] ? -1 : n[a] > n[b] ? 1 : 0);
+        const order = this.games.map((_, i) => i).sort((a, b) => (this.sortNames[a] < this.sortNames[b] ? -1 : 1));
+        const rank = new Float64Array(this.games.length);
+        order.forEach((i, r) => (rank[i] = -r));
+        key = (i) => rank[i];
+        break;
       }
     }
+    const keys = Float64Array.from(this.games, (_, i) => key(i));
+    this.sortKeys.set(sort, keys);
+    return keys;
   }
+
+
+
 
   /**
    * Games that share the most distinctive tags with `id`, favouring well-rated ones.
@@ -319,11 +459,19 @@ export class SearchIndex {
     // An unknown tag can't match anything; an unknown excluded tag excludes nothing.
     const tags = query.tags.map((t) => this.tagIds.get(lower(t)) ?? -1);
     const notTags = query.notTags.map((t) => this.tagIds.get(lower(t))).filter((t) => t !== undefined);
-    const matches = candidates.filter((i) => this.matchesFilters(i, query, tags, notTags));
+    const masks = buildMasks(query);
+    const matches = candidates.filter((i) => this.matchesFilters(i, query, tags, notTags, masks));
 
     // Without a text query "relevance" has nothing to rank by, so use popularity.
-    const cmp = this.comparator(query.sort === "relevance" && !q ? "reviews" : query.sort);
-    if (cmp) matches.sort(cmp);
+    const sort = query.sort === "relevance" && !q ? "reviews" : query.sort;
+    const start = (query.page - 1) * pageSize;
+    let ordered = matches;
+    if (sort !== "relevance") {
+      // Only the first pages are usually wanted: a top-k heap beats sorting everything.
+      const keys = this.sortKey(sort);
+      const need = start + pageSize;
+      ordered = need <= 3000 ? topK(matches, keys, need) : [...matches].sort((a, b) => keys[b] - keys[a]);
+    }
 
     const facetCounts = new Uint32Array(this.tagNames.length);
     for (const i of matches) for (const t of this.gameTags[i]) facetCounts[t]++;
@@ -333,12 +481,25 @@ export class SearchIndex {
       .sort((a, b) => b.count - a.count)
       .slice(0, FACET_COUNT);
 
-    const start = (query.page - 1) * pageSize;
+    // How many of the matches have each feature / language: what you'd get by adding it.
+    const featureHits = new Uint32Array(FEATURES.length);
+    const langHits = new Uint32Array(32); // indexed by ELanguage id
+    const langMasks = query.audio ? this.audioMasks : this.langMasks;
+    for (const i of matches) {
+      // Walk only the set bits: games have a handful of features, not 32.
+      for (let m = this.featureMasks[i]; m !== 0; m &= m - 1) featureHits[31 - Math.clz32(m & -m)]++;
+      for (let m = langMasks[i]; m !== 0; m &= m - 1) langHits[31 - Math.clz32(m & -m)]++;
+    }
+    const featureCounts = Object.fromEntries(FEATURES.map((f, b) => [f.key, featureHits[b]]));
+    const languageCounts = Object.fromEntries(LANGUAGES.map((l) => [l.code, langHits[l.id]]));
+
     return {
+      featureCounts,
+      languageCounts,
       total: matches.length,
       page: query.page,
       pageSize,
-      results: matches.slice(start, start + pageSize).map((i) => this.summaries[i]),
+      results: ordered.slice(start, start + pageSize).map((i) => this.summaries[i]),
       tagFacets,
       tookMs: Math.round(performance.now() - started),
     };

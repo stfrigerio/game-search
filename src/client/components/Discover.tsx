@@ -18,6 +18,16 @@ export const SHELVES: { title: string; subtitle: string; query: Partial<SearchQu
     query: { sort: "deal", discounted: true, minReviews: 200 },
   },
   {
+    title: "Most played right now",
+    subtitle: "Peak players on Steam yesterday",
+    query: { sort: "players", minPlayers: 1000 },
+  },
+  {
+    title: "Couch co-op night",
+    subtitle: "Best rated local and split-screen co-op",
+    query: { sort: "rating", features: ["localCoop"], minReviews: 200 },
+  },
+  {
     title: "Hidden gems",
     subtitle: "95%+ positive, but under 1,000 reviews",
     query: { sort: "rating", minPct: 95, minReviews: 50, maxReviews: 1000 },

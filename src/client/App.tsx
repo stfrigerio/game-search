@@ -3,6 +3,7 @@ import { DEFAULT_QUERY, parseQuery, serializeQuery, SORTS, type SearchQuery, typ
 import type { BestOffer, MetaResponse, SearchResponse } from "../shared/types.ts";
 import { api } from "./api.ts";
 import { Discover } from "./components/Discover.tsx";
+import { ActiveFilters, describeFilters, QuickFilters } from "./components/FilterChips.tsx";
 import { Filters } from "./components/Filters.tsx";
 import { GameDetail } from "./components/GameDetail.tsx";
 import { ResultCard } from "./components/ResultCard.tsx";
@@ -190,7 +191,7 @@ export function App() {
 
   const currency = meta?.currency ?? "USD";
   const pages = response ? Math.ceil(response.total / response.pageSize) : 0;
-  const activeFilters = [...serializeQuery({ ...query, q: "", sort: DEFAULT_QUERY.sort, page: 1 })].length;
+  const activeFilters = describeFilters(query, meta?.currency ?? "USD").length;
 
   return (
     <div className="app">
@@ -254,7 +255,7 @@ export function App() {
             <Filters
               query={query}
               allTags={meta?.tags ?? []}
-              facets={response?.tagFacets ?? []}
+              response={response}
               currency={currency}
               onChange={update}
             />
@@ -262,6 +263,8 @@ export function App() {
 
           <main>
             {view === "list" && <SteamImport />}
+            <QuickFilters query={query} currency={currency} onChange={update} />
+            <ActiveFilters query={query} currency={currency} onChange={update} />
             <div className="results-bar">
               <span className="muted">
                 {response ? `${response.total.toLocaleString()} ${response.total === 1 ? "game" : "games"}` : ""}
@@ -302,6 +305,7 @@ export function App() {
                     currency={currency}
                     onOpen={() => openGame(g.id)}
                     onTag={addTag}
+                    onDev={(dev) => update({ dev })}
                     offer={view === "list" ? offers[g.id] : undefined}
                   />
                 ))}
@@ -363,7 +367,17 @@ export function App() {
       )}
 
       {gameId && (
-        <GameDetail id={gameId} currency={currency} onClose={closeGame} onTag={addTag} onOpen={openGame} />
+        <GameDetail
+          id={gameId}
+          currency={currency}
+          onClose={closeGame}
+          onTag={addTag}
+          onOpen={openGame}
+          onDev={(dev) => {
+            setQInput("");
+            navigate({ view: "search", query: { ...DEFAULT_QUERY, dev, sort: "rating" }, gameId: null });
+          }}
+        />
       )}
     </div>
   );

@@ -43,6 +43,17 @@ export interface Game {
   earlyAccess: boolean;
   platforms: Platforms;
   deck: DeckCompat;
+  /** Steam store category ids (player modes, features, controller support). */
+  categories: number[];
+  /** Steam ELanguage ids with interface or subtitles, and with full audio. */
+  languages: number[];
+  audioLanguages: number[];
+  /** Steam content descriptor ids (1 nudity, 2 violence/gore, 3 adult sexual, 4 frequent nudity, 5 mature). */
+  contentDescriptors: number[];
+  /** Peak concurrent players yesterday (SteamSpy). */
+  peakPlayers: number | null;
+  /** Estimated owners range from SteamSpy, e.g. "2,000,000 .. 5,000,000". */
+  owners: string | null;
   steamAppId: number | null;
   stores: StoreListing[];
 }
@@ -68,6 +79,7 @@ export interface GameSummary {
   bestDiscountPct: number;
   bestDiscountEnds: number | null;
   bestStore: StoreId | null;
+  peakPlayers: number | null;
   free: boolean;
   stores: StoreId[];
 }
@@ -79,6 +91,9 @@ export interface SearchResponse {
   results: GameSummary[];
   /** Most common tags among all matches (not just this page). */
   tagFacets: { tag: string; count: number }[];
+  /** For each feature key / language code, how many matches have it. */
+  featureCounts: Record<string, number>;
+  languageCounts: Record<string, number>;
   tookMs: number;
 }
 
@@ -136,4 +151,6 @@ export interface PricesResponse {
 export interface GameDetailResponse {
   game: Game;
   summary: GameSummary;
+  features: string[];
+  languages: { code: string; audio: boolean }[];
 }

@@ -5,6 +5,7 @@ import type { CatalogStatus, Game, StoreId } from "../shared/types.ts";
 import { mergeCatalogs } from "./merge.ts";
 import { SearchIndex } from "./search.ts";
 import { SOURCES, type CrawlOptions } from "./sources/index.ts";
+import { crawlSteamSpy, type SpyStats } from "./sources/steamspy.ts";
 
 interface Snapshot {
   updatedAt: string;
@@ -19,6 +20,8 @@ export interface CatalogConfig {
   /** Re-crawl when the snapshot is older than this. */
   maxAgeMs: number;
   limit?: number;
+  /** Skip the slow (~5 min) SteamSpy player-count crawl. */
+  skipSteamSpy?: boolean;
 }
 
 /** Owns the current search index and keeps it fresh by re-crawling in the background. */
@@ -76,7 +79,7 @@ export class Catalog {
   }
 
   private async crawl() {
-    const { country, currency, limit, file } = this.config;
+    const { country, currency, limit } = this.config;
     const opts: CrawlOptions = {
       country,
       currency,
@@ -98,17 +101,56 @@ export class Catalog {
           catalogs.push(this.previousListings(store as StoreId));
         }
       }
-      const snap: Snapshot = { updatedAt: new Date().toISOString(), currency, games: mergeCatalogs(catalogs) };
+      const games = mergeCatalogs(catalogs);
+      await this.addPlayerCounts(games);
+      const snap: Snapshot = { updatedAt: new Date().toISOString(), currency, games };
       if (!snap.games.length) throw new Error("Crawl returned no games");
       this.install(snap);
-      await mkdir(dirname(file), { recursive: true });
-      await writeFile(`${file}.tmp`, gzipSync(JSON.stringify(snap)));
-      await rename(`${file}.tmp`, file);
+      await this.save(snap);
       this.lastError = null;
       console.log(`Catalog refreshed: ${snap.games.length} games in ${Math.round((Date.now() - started) / 1000)}s`);
     } catch (err) {
       this.lastError = String(err);
       console.error("Catalog refresh failed:", err);
+    }
+  }
+
+  private async save(snap: Snapshot) {
+    const { file } = this.config;
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(`${file}.tmp`, gzipSync(JSON.stringify(snap)));
+    await rename(`${file}.tmp`, file);
+  }
+
+  /** Refresh only player counts (SteamSpy) on the loaded catalogue and save it. */
+  async refreshPlayerCounts(): Promise<void> {
+    if (!this.index || !this.updatedAt) throw new Error("No catalogue loaded");
+    const games = this.index.games;
+    await this.addPlayerCounts(games);
+    const snap: Snapshot = { updatedAt: this.updatedAt.toISOString(), currency: this.currency, games };
+    this.install(snap);
+    await this.save(snap);
+  }
+
+  /** Fill peak players / owners from SteamSpy; on failure keep the previous numbers. */
+  private async addPlayerCounts(games: Game[]) {
+    let stats: Map<number, SpyStats>;
+    try {
+      if (this.config.skipSteamSpy) throw new Error("disabled");
+      stats = await crawlSteamSpy((msg) => (this.progress = msg), this.config.limit ? 2 : undefined);
+    } catch (err) {
+      console.warn("SteamSpy unavailable, keeping previous player counts:", String(err));
+      stats = new Map();
+      for (const g of this.index?.games ?? []) {
+        if (g.steamAppId && g.peakPlayers !== null) stats.set(g.steamAppId, { peakPlayers: g.peakPlayers, owners: g.owners ?? "" });
+      }
+    }
+    for (const g of games) {
+      const s = g.steamAppId ? stats.get(g.steamAppId) : undefined;
+      if (s) {
+        g.peakPlayers = s.peakPlayers;
+        g.owners = s.owners || null;
+      }
     }
   }
 

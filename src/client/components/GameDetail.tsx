@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { GameDetailResponse, GameSummary, PricesResponse } from "../../shared/types.ts";
 import { api } from "../api.ts";
+import { FEATURE_GROUPS, FEATURES, LANGUAGE_BY_CODE, type FeatureGroup } from "../../shared/features.ts";
 import { MiniCard } from "./MiniCard.tsx";
 import { SaveButton } from "./SaveButton.tsx";
 import { DECK_LABELS, formatDate, formatPrice, reviewLabel, saleEnds, STORE_NAMES } from "../format.ts";
@@ -11,6 +12,7 @@ interface Props {
   onClose: () => void;
   onTag: (tag: string) => void;
   onOpen: (id: string) => void;
+  onDev: (dev: string) => void;
 }
 
 const KIND_LABELS = {
@@ -19,7 +21,7 @@ const KIND_LABELS = {
   tracker: "Price trackers",
 } as const;
 
-export function GameDetail({ id, currency, onClose, onTag, onOpen }: Props) {
+export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Props) {
   const [detail, setDetail] = useState<GameDetailResponse | null>(null);
   const [prices, setPrices] = useState<PricesResponse | null>(null);
   const [similar, setSimilar] = useState<GameSummary[] | null>(null);
@@ -66,7 +68,14 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen }: Props) {
             </div>
             <p className="muted">
               {formatDate(game.releaseDate, game.comingSoon)}
-              {game.developers.length > 0 && ` · ${game.developers.join(", ")}`}
+              {game.developers.map((d) => (
+                <span key={d}>
+                  {" · "}
+                  <button className="dev-link" title={`More by ${d}`} onClick={() => onDev(d)}>
+                    {d}
+                  </button>
+                </span>
+              ))}
               {game.publishers.length > 0 && game.publishers.join() !== game.developers.join() && ` · ${game.publishers.join(", ")}`}
             </p>
             {game.description && <p>{game.description}</p>}
@@ -88,6 +97,45 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen }: Props) {
                   </span>
                 ))}
             </div>
+
+            {(game.peakPlayers || game.owners) && (
+              <p className="muted small">
+                {game.peakPlayers ? `👥 ${game.peakPlayers.toLocaleString()} peak players yesterday` : ""}
+                {game.peakPlayers && game.owners ? " · " : ""}
+                {game.owners ? `${game.owners.replace(" .. ", "–")} owners (estimate)` : ""}
+              </p>
+            )}
+
+            {detail.features.length > 0 && (
+              <div className="detail-features">
+                {(Object.keys(FEATURE_GROUPS) as FeatureGroup[]).map((group) => {
+                  const items = FEATURES.filter((f) => f.group === group && detail.features.includes(f.key));
+                  if (!items.length) return null;
+                  return (
+                    <div key={group} className="feature-group">
+                      <div className="muted small">{FEATURE_GROUPS[group]}</div>
+                      <div className="badges">
+                        {items.map((f) => (
+                          <span key={f.key} className="badge">
+                            {f.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {detail.languages.length > 0 && (
+              <p className="small languages">
+                <span className="muted">Languages: </span>
+                {detail.languages
+                  .map((l) => `${LANGUAGE_BY_CODE.get(l.code)?.name ?? l.code}${l.audio ? " 🔊" : ""}`)
+                  .join(", ")}
+                <span className="muted"> (🔊 full audio)</span>
+              </p>
+            )}
 
             <h3>Stores</h3>
             <table className="prices">

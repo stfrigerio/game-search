@@ -8,6 +8,7 @@ interface Props {
   currency: string;
   onOpen: () => void;
   onTag: (tag: string) => void;
+  onDev?: (dev: string) => void;
   /** Cheapest offer across official stores; undefined = not looked up, null = none found. */
   offer?: BestOffer | null;
 }
@@ -24,7 +25,7 @@ export function Price({ game, currency }: { game: GameSummary; currency: string 
   );
 }
 
-export function ResultCard({ game, currency, onOpen, onTag, offer }: Props) {
+export function ResultCard({ game, currency, onOpen, onTag, onDev, offer }: Props) {
   const [imageFailed, setImageFailed] = useState(false);
   const review = reviewLabel(game.reviewPct, game.reviewCount);
   return (
@@ -55,7 +56,23 @@ export function ResultCard({ game, currency, onOpen, onTag, offer }: Props) {
             )}
           </span>
           <span className="muted">{formatDate(game.releaseDate, game.comingSoon)}</span>
-          {game.developers[0] && <span className="muted">{game.developers[0]}</span>}
+          {game.developers[0] && (
+            <button
+              className="dev-link"
+              title={`More by ${game.developers[0]}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDev?.(game.developers[0]);
+              }}
+            >
+              {game.developers[0]}
+            </button>
+          )}
+          {game.peakPlayers ? (
+            <span className="muted" title="Peak concurrent players on Steam yesterday (SteamSpy)">
+              👥 {formatCount(game.peakPlayers)} playing
+            </span>
+          ) : null}
         </div>
         <div className="card-tags">
           {game.tags.slice(0, 6).map((t) => (
