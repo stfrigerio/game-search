@@ -10,10 +10,9 @@ WORKDIR /app
 ENV NODE_ENV=production PORT=3001
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-COPY package.json tsconfig.json ./
-COPY src ./src
-# The catalogue snapshot lives here; mount a volume so restarts don't re-crawl.
-VOLUME /app/data
+COPY --from=build /app/dist-server ./dist-server
+COPY package.json ./
 EXPOSE 3001
-# The index takes ~700 MB once loaded; give V8 room for a re-crawl on top.
-CMD ["node", "--max-old-space-size=2048", "--import", "tsx", "src/server/index.ts"]
+# Needs DATABASE_URL. Rebuild the catalogue with:
+#   docker run --rm -e DATABASE_URL=... <image> node dist-server/crawl-cli.js
+CMD ["node", "--max-old-space-size=192", "dist-server/index.js"]

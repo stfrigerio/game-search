@@ -1,4 +1,4 @@
-import type { Game } from "../shared/types.ts";
+import type { Game, StoreId } from "../shared/types.ts";
 
 /** Lowercased, accent/symbol-free title used to spot the same game on different stores. */
 export function titleKey(name: string): string {
@@ -34,20 +34,85 @@ export function looseTitleKey(name: string): string {
 const year = (ts: number | null) => (ts ? new Date(ts * 1000).getUTCFullYear() : null);
 const reviewTotal = (g: Game) => g.stores.reduce((n, s) => n + s.reviewCount, 0);
 
-function pickCandidate(candidates: Game[], incoming: Game): Game {
+/** What the matcher remembers about a game: enough to pick between same-titled games. */
+interface Entry {
+  id: string;
+  year: number | null;
+  reviews: number;
+  stores: Set<StoreId>;
+}
+
+/**
+ * Finds the game a listing from another store belongs to, by title. Keeps only a
+ * small entry per game, so the crawler can match GOG against ~200k Steam games
+ * without holding the games themselves.
+ */
+export class TitleMatcher {
+  private readonly byKey = new Map<string, Entry[]>();
+  private readonly byLooseKey = new Map<string, Entry[]>();
+  private pending: Entry[] = [];
+  private pendingNames: string[] = [];
+
+  /** Remember a game. It becomes matchable after the next `commit()`. */
+  add(game: Game) {
+    this.pending.push({
+      id: game.id,
+      year: year(game.releaseDate),
+      reviews: reviewTotal(game),
+      stores: new Set(game.stores.map((s) => s.store)),
+    });
+    this.pendingNames.push(game.name);
+  }
+
+  /**
+   * Make added games matchable. Games from one store are committed only after that
+   * store's matching is done, so two games from the same store never merge.
+   */
+  commit() {
+    this.pending.forEach((e, k) => {
+      for (const [map, key] of [
+        [this.byKey, titleKey(this.pendingNames[k])],
+        [this.byLooseKey, looseTitleKey(this.pendingNames[k])],
+      ] as const) {
+        if (!key) continue;
+        const bucket = map.get(key);
+        if (bucket) bucket.push(e);
+        else map.set(key, [e]);
+      }
+    });
+    this.pending = [];
+    this.pendingNames = [];
+  }
+
+  /** Id of the game `game` should merge into, or null. Claims that game for `game`'s store. */
+  match(game: Game): string | null {
+    const store = game.stores[0]?.store;
+    const free = (es: Entry[] | undefined) => es?.filter((e) => !store || !e.stores.has(store)) ?? [];
+    const exact = free(this.byKey.get(titleKey(game.name)));
+    // Loose matches are only trusted when unambiguous.
+    const loose = exact.length ? [] : free(this.byLooseKey.get(looseTitleKey(game.name)));
+    const candidates = exact.length ? exact : loose.length === 1 ? loose : [];
+    if (!candidates.length) return null;
+    const pick = pickCandidate(candidates, year(game.releaseDate));
+    if (store) pick.stores.add(store);
+    return pick.id;
+  }
+}
+
+function pickCandidate(candidates: Entry[], y: number | null): Entry {
   if (candidates.length === 1) return candidates[0];
-  const y = year(incoming.releaseDate);
   return [...candidates].sort((a, b) => {
     if (y !== null) {
-      const da = Math.abs((year(a.releaseDate) ?? 9999) - y);
-      const db = Math.abs((year(b.releaseDate) ?? 9999) - y);
+      const da = Math.abs((a.year ?? 9999) - y);
+      const db = Math.abs((b.year ?? 9999) - y);
       if (da !== db) return da - db;
     }
-    return reviewTotal(b) - reviewTotal(a);
+    return b.reviews - a.reviews;
   })[0];
 }
 
-function absorb(target: Game, other: Game) {
+/** Fold `other` (the same game from another store) into `target`. */
+export function absorb(target: Game, other: Game) {
   for (const listing of other.stores) {
     if (!target.stores.some((s) => s.store === listing.store)) target.stores.push(listing);
   }
@@ -68,47 +133,30 @@ function absorb(target: Game, other: Game) {
 }
 
 /**
- * Fold per-store catalogues into one list of games. The first catalogue is the
- * base (Steam: biggest and richest metadata); each game from the later ones is
- * merged into a base game with the same title, or added as a new game.
+ * Fold per-store catalogues into one list of games, in memory. The first catalogue
+ * is the base (Steam: biggest and richest metadata); each game from the later ones
+ * is merged into a base game with the same title, or added as a new game.
  */
 export function mergeCatalogs(catalogs: Game[][]): Game[] {
   const [base = [], ...others] = catalogs;
   const merged = base.map((g) => ({ ...g, stores: [...g.stores] }));
-  const byKey = new Map<string, Game[]>();
-  const byLooseKey = new Map<string, Game[]>();
-  const index = (g: Game) => {
-    for (const [map, key] of [
-      [byKey, titleKey(g.name)],
-      [byLooseKey, looseTitleKey(g.name)],
-    ] as const) {
-      if (!key) continue;
-      const bucket = map.get(key);
-      if (bucket) bucket.push(g);
-      else map.set(key, [g]);
-    }
-  };
-  merged.forEach(index);
-
+  const byId = new Map(merged.map((g) => [g.id, g]));
+  const matcher = new TitleMatcher();
+  merged.forEach((g) => matcher.add(g));
+  matcher.commit();
   for (const catalog of others) {
-    const added: Game[] = [];
     for (const game of catalog) {
-      const store = game.stores[0]?.store;
-      const free = (gs: Game[] | undefined) => gs?.filter((g) => !g.stores.some((s) => s.store === store)) ?? [];
-      const exact = free(byKey.get(titleKey(game.name)));
-      // Loose matches are only trusted when unambiguous.
-      const loose = exact.length ? [] : free(byLooseKey.get(looseTitleKey(game.name)));
-      const candidates = exact.length ? exact : loose.length === 1 ? loose : [];
-      if (candidates.length) {
-        absorb(pickCandidate(candidates, game), game);
+      const target = matcher.match(game);
+      if (target) {
+        absorb(byId.get(target)!, game);
       } else {
         const copy = { ...game, stores: [...game.stores] };
         merged.push(copy);
-        added.push(copy);
+        byId.set(copy.id, copy);
+        matcher.add(copy);
       }
     }
-    // Index after the loop so games from one store never merge with each other.
-    added.forEach(index);
+    matcher.commit();
   }
   return merged;
 }

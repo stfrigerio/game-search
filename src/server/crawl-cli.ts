@@ -1,22 +1,16 @@
-import { Catalog } from "./catalog.ts";
-import { catalogConfig } from "./config.ts";
+import { crawlerConfig } from "./config.ts";
+import { crawlCatalog, refreshPlayerCounts } from "./crawler.ts";
+import { closeDb } from "./db/pool.ts";
 
-// `npm run crawl`: rebuild the catalogue snapshot without starting the web server.
-// `npm run crawl -- --players`: only refresh player counts (SteamSpy).
-const catalog = new Catalog(catalogConfig);
-await catalog.load();
-const ticker = setInterval(() => {
-  const { progress } = catalog.status();
-  if (progress) console.log(progress);
-}, 5000);
-if (process.argv.includes("--players")) {
-  // Only refresh player counts on the existing catalogue (`npm run crawl -- --players`).
-  await catalog.refreshPlayerCounts();
-} else {
-  await catalog.refresh();
+// `npm run crawl`: rebuild the catalogue (run nightly by game-search-crawl.timer).
+// `npm run crawl -- --players`: only refresh player counts from SteamSpy.
+try {
+  if (process.argv.includes("--players")) await refreshPlayerCounts();
+  else await crawlCatalog(crawlerConfig);
+} catch (err) {
+  console.error("Crawl failed:", err);
+  process.exitCode = 1;
+} finally {
+  await closeDb();
+  console.log(`Peak memory: ${Math.round(process.resourceUsage().maxRSS / 1024)} MB`);
 }
-clearInterval(ticker);
-
-const status = catalog.status();
-console.log(JSON.stringify({ games: status.gameCount, stores: status.storeCounts }, null, 2));
-if (status.lastError) process.exit(1);

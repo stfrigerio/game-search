@@ -8,11 +8,6 @@ import { USER_AGENT } from "../http.ts";
 const PAUSE_MS = 3000;
 const MAX_PAGES = 150;
 
-export interface SpyStats {
-  peakPlayers: number;
-  owners: string;
-}
-
 interface SpyApp {
   appid: number;
   ccu?: number;
@@ -36,8 +31,16 @@ async function fetchPage(page: number): Promise<SpyApp[] | null> {
   }
 }
 
-export async function crawlSteamSpy(onProgress?: (msg: string) => void, maxPages = MAX_PAGES): Promise<Map<number, SpyStats>> {
-  const stats = new Map<number, SpyStats>();
+/**
+ * Stream SteamSpy pages into `onPage`. Returns how many apps were seen; throws if
+ * SteamSpy gave us nothing at all.
+ */
+export async function crawlSteamSpy(
+  onPage: (apps: { appid: number; peakPlayers: number; owners: string }[]) => Promise<void>,
+  onProgress?: (msg: string) => void,
+  maxPages = MAX_PAGES,
+): Promise<number> {
+  let seen = 0;
   for (let page = 0; page < maxPages; page++) {
     if (page > 0) await sleep(PAUSE_MS);
     onProgress?.(`SteamSpy: page ${page + 1}`);
@@ -47,13 +50,14 @@ export async function crawlSteamSpy(onProgress?: (msg: string) => void, maxPages
       try {
         apps = await fetchPage(page);
       } catch (err) {
-        if (attempt === 2 && !stats.size) throw err;
+        if (attempt === 2 && !seen) throw err;
       }
     }
     // Past the last page SteamSpy returns an empty list or an error text; either way we're done.
     if (!apps?.length) break;
-    for (const a of apps) stats.set(a.appid, { peakPlayers: a.ccu ?? 0, owners: a.owners ?? "" });
+    await onPage(apps.map((a) => ({ appid: a.appid, peakPlayers: a.ccu ?? 0, owners: a.owners ?? "" })));
+    seen += apps.length;
   }
-  if (!stats.size) throw new Error("SteamSpy returned no data");
-  return stats;
+  if (!seen) throw new Error("SteamSpy returned no data");
+  return seen;
 }

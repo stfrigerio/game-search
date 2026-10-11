@@ -236,8 +236,19 @@ export function App() {
       {!ready && (
         <div className="layout single">
           <div className="notice">
-            <strong>Building the game catalogue…</strong>
-            <p className="muted">The first start crawls every store, which takes a few minutes. {meta?.progress ?? ""}</p>
+            {meta?.refreshing ? (
+              <>
+                <strong>Building the game catalogue…</strong>
+                <p className="muted">The first crawl of every store takes about 8 minutes. {meta.progress ?? ""}</p>
+              </>
+            ) : (
+              <>
+                <strong>No game catalogue yet</strong>
+                <p className="muted">
+                  {meta ? "Run the crawl on the server (npm run crawl) to build it." : "Connecting to the server…"}
+                </p>
+              </>
+            )}
             {meta?.lastError && <p className="error">{meta.lastError}</p>}
           </div>
         </div>

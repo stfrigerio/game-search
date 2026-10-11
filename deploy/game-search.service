@@ -1,0 +1,20 @@
+# Web server: answers searches from Postgres. Holds no catalogue in memory.
+[Unit]
+Description=Game Search web server
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=game-search
+WorkingDirectory=/opt/game-search
+EnvironmentFile=/etc/game-search.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/env node --max-old-space-size=192 dist-server/index.js
+Restart=on-failure
+RestartSec=5
+# Normally ~100 MB; the cap makes a regression fail loudly instead of squeezing the box.
+MemoryMax=384M
+
+[Install]
+WantedBy=multi-user.target

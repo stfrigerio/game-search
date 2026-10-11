@@ -1,0 +1,12 @@
+[Unit]
+Description=Nightly Game Search catalogue crawl
+
+[Timer]
+# Pick a quiet hour that doesn't overlap the nightly Postgres backup.
+OnCalendar=*-*-* 05:07:00
+RandomizedDelaySec=10min
+# Catch up after downtime.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

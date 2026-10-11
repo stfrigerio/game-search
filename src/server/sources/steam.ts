@@ -135,7 +135,16 @@ export function steamItemToGame(item: SteamItem, tagNames: Map<number, string>):
   };
 }
 
-export async function crawlSteam({ country, onProgress, limit }: CrawlOptions): Promise<Game[]> {
+/**
+ * Stream Steam's game catalogue page by page (1,000 games each) into `onPage`, so
+ * the caller can store each page without holding all ~200k games in memory.
+ * Pages arrive out of order; the same app can show up twice while the catalogue
+ * shifts under us, so duplicates are dropped. Returns the number of games.
+ */
+export async function crawlSteam(
+  { country, onProgress, limit }: CrawlOptions,
+  onPage: (games: Game[]) => Promise<void>,
+): Promise<number> {
   const tagList = await fetchJson<{ response: { tags: SteamTag[] } }>(
     `${API}/IStoreService/GetTagList/v1/?language=english`,
   );
@@ -143,23 +152,27 @@ export async function crawlSteam({ country, onProgress, limit }: CrawlOptions): 
 
   const first = await fetchJson<QueryResponse>(queryUrl(0, country));
   const total = Math.min(first.response.metadata.total_matching_records, limit ?? Infinity);
-  const starts: number[] = [];
+  const starts = [0];
   for (let s = PAGE_SIZE; s < total; s += PAGE_SIZE) starts.push(s);
 
-  let done = 1;
-  const pageCount = starts.length + 1;
-  onProgress?.(`Steam: page 1/${pageCount}`);
-  const rest = await mapLimit(starts, 3, async (start) => {
-    const page = await fetchJson<QueryResponse>(queryUrl(start, country));
-    onProgress?.(`Steam: page ${++done}/${pageCount}`);
-    return page.response.store_items ?? [];
+  const seen = new Set<number>();
+  let count = 0;
+  let done = 0;
+  // Pages are fetched 3 at a time but handed over one at a time.
+  let handOver = Promise.resolve();
+  await mapLimit(starts, 3, async (start) => {
+    const page = start === 0 ? first : await fetchJson<QueryResponse>(queryUrl(start, country));
+    const games: Game[] = [];
+    for (const item of page.response.store_items ?? []) {
+      const game = steamItemToGame(item, tagNames);
+      if (!game || seen.has(game.steamAppId!) || count >= total) continue;
+      seen.add(game.steamAppId!);
+      games.push(game);
+      count++;
+    }
+    handOver = handOver.then(() => onPage(games));
+    await handOver;
+    onProgress?.(`Steam: page ${++done}/${starts.length}`);
   });
-
-  // Paging over a live catalogue can return the same app twice; keep the first.
-  const games = new Map<number, Game>();
-  for (const item of [first.response.store_items ?? [], ...rest].flat()) {
-    const game = steamItemToGame(item, tagNames);
-    if (game && !games.has(game.steamAppId!)) games.set(game.steamAppId!, game);
-  }
-  return [...games.values()].slice(0, limit ?? Infinity);
+  return count;
 }

@@ -12,11 +12,13 @@ export interface CrawlOptions {
   limit?: number;
 }
 
+export { crawlSteam };
+
 /**
- * Every catalogue we crawl. Each returns games listed on that one store; merge.ts
- * then folds listings of the same game together. Add a new store here.
+ * Stores crawled after Steam. Steam is the base catalogue (streamed, see steam.ts);
+ * each of these returns its games, which are merged into Steam games with the same
+ * title or added as new games. Add a new store here.
  */
-export const SOURCES: Record<StoreId, (opts: CrawlOptions) => Promise<Game[]>> = {
-  steam: crawlSteam,
+export const OTHER_SOURCES: Partial<Record<StoreId, (opts: CrawlOptions) => Promise<Game[]>>> = {
   gog: crawlGog,
 };

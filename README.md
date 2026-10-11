@@ -58,44 +58,45 @@ across official stores and key resellers (G2A, Kinguin, Eneba, Instant Gaming, �
 
 ## Running it
 
-Needs Node 20+.
+Needs Node 20+ and PostgreSQL 13+ with the `pg_trgm` extension (part of the standard
+`postgresql-contrib` package).
 
 ```sh
-npm install
-npm run crawl   # build the catalogue (~7 minutes, written to data/catalog.json.gz)
-npm run dev     # API on :3001, UI on http://localhost:5173
-```
+# once, as a Postgres superuser
+createuser -P game_search
+createdb -O game_search game_search
+psql -d game_search -c 'CREATE EXTENSION pg_trgm'
 
-You can skip `npm run crawl`: the server crawls on first start if there's no catalogue,
-and re-crawls in the background every 24 hours. Search works on the old data meanwhile.
+export DATABASE_URL=postgres://game_search:<password>@localhost/game_search
+npm install
+npm run migrate   # create the tables
+npm run crawl     # build the catalogue: ~8 minutes, ~500 MB of RAM at peak
+npm run dev       # API on :3001, UI on http://localhost:5173
+```
 
 Production:
 
 ```sh
-npm run build && npm start   # serves the UI and API on http://localhost:3001
+npm run build     # front-end into dist/, server into dist-server/
+npm start         # serves the UI and API on http://localhost:3001
 ```
 
-Or with Docker:
-
-```sh
-docker build -t game-search .
-docker run -p 3001:3001 -v game-search-data:/app/data game-search
-```
-
-The server holds the whole catalogue in memory and uses about 700 MB of RAM once
-loaded. Peaks during a re-crawl are higher.
+The web server keeps nothing in memory but a small cache (~100 MB RSS). The catalogue
+is rebuilt by a separate nightly job, `node dist-server/crawl-cli.js`; see
+[deploy/DEPLOY.md](deploy/DEPLOY.md) for the systemd service and timer.
+`npm run crawl -- --players` refreshes only the SteamSpy player counts.
 
 ### Configuration
 
-| Env var          | Default                | Meaning                                                   |
-| ---------------- | ---------------------- | --------------------------------------------------------- |
-| `PORT`           | `3001`                 | API/server port                                           |
-| `STORE_COUNTRY`  | `US`                   | Region for Steam/GOG prices                               |
-| `STORE_CURRENCY` | `USD`                  | Currency for that region (GOG needs it spelled out)       |
-| `REFRESH_HOURS`  | `24`                   | Re-crawl interval                                         |
-| `DATA_FILE`      | `data/catalog.json.gz` | Where the catalogue snapshot is stored                    |
-| `CRAWL_LIMIT`    | unset                  | Cap games per store, for fast local experiments (`5000`)  |
-| `SKIP_STEAMSPY`  | unset                  | `1` skips the ~5 min SteamSpy player-count crawl          |
+| Env var          | Default | Meaning                                                   |
+| ---------------- | ------- | --------------------------------------------------------- |
+| `DATABASE_URL`   | —       | Postgres connection string (required)                     |
+| `PORT`           | `3001`  | API/server port                                           |
+| `STORE_COUNTRY`  | `US`    | Region for Steam/GOG prices (crawler)                     |
+| `STORE_CURRENCY` | `USD`   | Currency for that region; GOG needs it spelled out        |
+| `CRAWL_LIMIT`    | unset   | Cap games per store, for fast local experiments (`5000`)  |
+| `SKIP_STEAMSPY`  | unset   | `1` skips the ~5 min SteamSpy player-count crawl          |
+| `DB_POOL_SIZE`   | `6`     | Max Postgres connections from the web server              |
 
 E.g. `STORE_COUNTRY=IT STORE_CURRENCY=EUR npm run crawl` for Italian euro prices.
 CheapShark comparison prices are always in USD.
@@ -104,20 +105,39 @@ CheapShark comparison prices are always in USD.
 
 ```
 src/
-  shared/          types, filter definitions (features.ts) and search-query <-> URL params
+  shared/            types, filter definitions (features.ts) and search-query <-> URL params
   server/
-    sources/       one crawler per store; add new stores here
-      steam.ts     Steam's store query API (no API key needed)
-      gog.ts       GOG's catalogue API (no API key needed)
-      steamspy.ts  player counts and owner estimates (slow, polite crawl)
-    merge.ts       folds the same game from different stores into one entry
-    search.ts      in-memory index: MiniSearch for text, then filters, sort, facets
-    catalog.ts     crawl → merge → index, snapshot to disk, periodic refresh
-    prices.ts      CheapShark live prices + reseller/tracker links (edit the list here)
-    steam-profile.ts  Steam profile → SteamID64 → public wishlist
-    index.ts       Express API (below)
-  client/          React UI (Vite)
+    sources/         one crawler per store; add new stores here
+      steam.ts       Steam's store query API (no API key), streamed page by page
+      gog.ts         GOG's catalogue API (no API key)
+      steamspy.ts    player counts and owner estimates (slow, polite crawl)
+    crawler.ts       crawl → staging schema → atomic swap (crawl-cli.ts runs it)
+    merge.ts         matches the same game across stores by title
+    derive.ts        per-game summary values: rating, best price, feature bitmasks
+    db/
+      schema.ts      tables and indexes (migrate-cli.ts creates them)
+      rows.ts        Game <-> table rows
+      search.ts      filters, sorting, text search, counts, similar games as SQL
+    prices.ts        CheapShark live prices + reseller/tracker links (edit the list here)
+    steam-profile.ts Steam profile → SteamID64 → public wishlist
+    index.ts         Express API (below)
+  client/            React UI (Vite)
 ```
+
+**Storage.** Each game is a row in `catalog.games`, a narrow table holding only what
+searches filter and sort on (it stays in Postgres' cache), plus `catalog.game_details`
+for display data, read only for the games on screen. Player modes, features,
+languages and content flags are bitmask columns; tags are an `int[]` with a GIN
+index; titles and developer names have trigram indexes for typo-tolerant search.
+Everything in the `catalog` schema is rebuilt by each crawl, so it doesn't need
+backing up.
+
+**Crawling.** The crawler writes Steam pages to a `catalog_staging` schema as they
+arrive, keeping only a small title index in memory to match GOG games against Steam.
+At the end it builds the indexes and swaps the schemas in one transaction, so the site
+always serves a complete catalogue. If any store fails, the crawl aborts and yesterday's
+catalogue stays live; a failed SteamSpy crawl just carries over the previous player
+counts. An advisory lock stops two crawls from running at once.
 
 API:
 
@@ -147,6 +167,9 @@ occasionally revoked. The UI labels them separately from official stores.
 ## Development
 
 ```sh
-npm test          # vitest
 npm run typecheck
+TEST_DATABASE_URL=postgres://game_search:<pw>@localhost/game_search_test npm test
 ```
+
+Database tests wipe and reload the catalogue in `TEST_DATABASE_URL`, so point it at a
+separate database. Without it they're skipped; CI runs them against a Postgres service.
