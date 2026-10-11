@@ -59,7 +59,7 @@ export function gpuScores(line: string): number[] {
       return " ";
     });
   };
-  take(/\barc\s*a?(\d{3})\b/gi, (m) => (Number(m[1]) >= 700 ? 10 : Number(m[1]) >= 500 ? 8 : 4.5));
+  take(/\b(?:intel\s+)?arc\s*a?(\d{3})\b/gi, (m) => (Number(m[1]) >= 700 ? 10 : Number(m[1]) >= 500 ? 8 : 4.5));
   // Integrated graphics before Radeon, so "Intel HD 4000" is not read as a Radeon HD.
   take(/\bintel\b[^,\/\n(]*|\buhd\s*(?:graphics)?\s*\d*|\biris\b[^,\/\n(]*|\bhd\s+graphics\s*\d*/gi, () => 0.7);
   take(/\b(?:integrated|onboard|on-board)\b/gi, () => 0.5);

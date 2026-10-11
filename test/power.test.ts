@@ -44,6 +44,11 @@ describe("gpuScores", () => {
     expect(gpuScores("NVIDIA GeForce GTX 650Ti 2GB, AMD Radeon HD 7750 2GB")).toHaveLength(2);
   });
 
+  it("counts an Intel Arc card once, as an Arc", () => {
+    expect(gpuScores("Nvidia GTX 970 / RX 480 / Intel Arc A380")).toHaveLength(3);
+    expect(level("8 GB RAM", "Nvidia GTX 970 / RX 480 / Intel Arc A380 / Qualcomm Adreno X1 (4GB+ of VRAM)")).toBe(3);
+  });
+
   it("does not take video memory for a card model", () => {
     expect(gpuScores("NVIDIA GEFORCE GTX 1060 3 GB or AMD RADEON RX 580 4 GB").every((s) => s >= 5.5)).toBe(true);
   });
