@@ -128,6 +128,10 @@ export async function migrateBase(client: pg.ClientBase) {
       level    smallint,                             -- power level these point to, if any
       read_at  timestamptz NOT NULL DEFAULT now()
     );
+    -- The recommended requirements, added after the first version read only the minimum.
+    ALTER TABLE public.specs ADD COLUMN IF NOT EXISTS rec_gpu real;
+    ALTER TABLE public.specs ADD COLUMN IF NOT EXISTS rec_vram real;
+    ALTER TABLE public.specs ADD COLUMN IF NOT EXISTS rec_gpu_text text NOT NULL DEFAULT '';
   `);
 }
 

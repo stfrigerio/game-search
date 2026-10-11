@@ -175,21 +175,26 @@ occasionally revoked. The UI labels them separately from official stores.
 Every game has a power level, shown as a three-bar meter and filterable with `power=low,mid,high`:
 
 - **Light**: runs on almost anything, integrated graphics included.
-- **Medium**: wants a graphics card, an older one will do (roughly GTX 660 to GTX 1050 Ti).
-- **Demanding**: wants a recent gaming PC (minimum of a GTX 970 / 1060 / RX 480 or better).
+- **Medium**: wants a graphics card, an older one will do.
+- **Demanding**: wants a recent gaming PC (around a GTX 1060 or better to play properly).
 
-The level comes from the store's **minimum requirements**. The catalogue APIs don't carry
-them, so the web server reads them from Steam's `appdetails` one game at a time in the
-background (most reviewed games first, one request every 1.6 s to stay under Steam's limit
-of about 200 per five minutes) and keeps them in `public.specs`, which crawls don't
-rebuild. Reading all ~190k games takes a few days; the first tens of thousands, which
-are the games people actually look for, take one.
+The level comes from the store's **minimum and recommended requirements**. The catalogue
+APIs don't carry them, so the web server reads them from Steam's `appdetails` one game at
+a time in the background (most reviewed games first, one request every 1.6 s to stay
+under Steam's limit of about 200 per five minutes) and keeps them in `public.specs`,
+which crawls don't rebuild. Reading all ~190k games takes a few days; the first tens of
+thousands, which are the games people actually look for, take one.
 
-`src/server/power.ts` picks the graphics card, video memory and RAM out of the free text
-and decides the level: the card decides, memory only nudges, disk space is ignored. Until
-a game has been read (and for GOG-only games) the level is an **estimate** from tags, age
-and price, drawn with a dashed edge. On a sample of games with requirements the estimate
-agreed with them about 4 times in 5 and was never off by two levels.
+`src/server/power.ts` picks the graphics cards out of the free text, scores them on a
+scale where a GTX 1060 is 6, and takes the point halfway between the minimum and the
+recommended card as what the game really wants. The minimum alone flatters: Divinity:
+Original Sin 2 lists a GTX 550 as minimum and a GTX 770 as recommended. Under about a
+GTX 650 that is light, from about 4.5 on the scale it is demanding. Just above the light
+line a 2D or pre-2012 game still counts as light, because those routinely ask for more
+than they use. Memory only nudges; disk space is ignored.
+
+Until a game has been read (and for GOG-only games) the level is an **estimate** from
+tags, age and price, drawn with a dashed edge.
 
 ## Development
 

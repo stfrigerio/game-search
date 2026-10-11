@@ -14,7 +14,7 @@ export type PowerKey = (typeof POWER)[number]["key"];
 export const POWER_BY_KEY = new Map<string, (typeof POWER)[number]>(POWER.map((p) => [p.key, p]));
 export const POWER_BY_LEVEL = new Map<number, (typeof POWER)[number]>(POWER.map((p) => [p.level, p]));
 
-/** What the store's minimum requirements say, as far as we could read them. */
+/** What the store's system requirements say, as far as we could read them. */
 export interface Specs {
   /** GB of memory. */
   ram: number | null;
@@ -26,4 +26,8 @@ export interface Specs {
   gpu: number | null;
   /** The graphics line as the store words it. */
   gpuText: string;
+  /** The same three for the recommended requirements, when the store gives them. */
+  recGpu: number | null;
+  recVram: number | null;
+  recGpuText: string;
 }

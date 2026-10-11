@@ -183,7 +183,7 @@ describe.skipIf(!url)("computer power", () => {
   let light: Game;
   let heavy: Game;
   let read: Game;
-  const specs = { ram: 16, vram: 8, disk: 100, gpu: 11, gpuText: "RTX 3060" };
+  const specs = { ram: 16, vram: 8, disk: 100, gpu: 11, gpuText: "RTX 3060", recGpu: null, recVram: null, recGpuText: "" };
 
   it("loads, estimating from tags, age and price", async () => {
     const { db } = await import("../src/server/db/pool.ts");

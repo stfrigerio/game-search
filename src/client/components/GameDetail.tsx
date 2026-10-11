@@ -117,11 +117,12 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Prop
                   ]
                     .filter(Boolean)
                     .join(", ")}
+                  {detail.specs.recGpuText && `. It recommends: ${detail.specs.recGpuText}`}
                 </p>
               )}
               <p className="muted small">
                 {summary.powerKnown
-                  ? "Worked out from the store's minimum requirements."
+                  ? "Worked out from the store's minimum and recommended requirements."
                   : detail.specs
                     ? "The store's requirements don't name a graphics card, so this is an estimate from the game's tags, age and price."
                     : "An estimate from the game's tags, age and price. The store's requirements haven't been read yet."}

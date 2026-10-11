@@ -2,10 +2,10 @@ import type { Specs } from "../shared/power.ts";
 import { db } from "./db/pool.ts";
 import { LIVE } from "./db/schema.ts";
 import { USER_AGENT } from "./http.ts";
-import { levelFromSpecs, parseRequirements } from "./power.ts";
+import { isFlat, levelFromSpecs, parseRequirements } from "./power.ts";
 
 /**
- * Minimum system requirements read from Steam, in `public.specs`. Unlike the catalogue
+ * System requirements (minimum and recommended) read from Steam, in `public.specs`. Unlike the catalogue
  * this table is not rebuilt by a crawl: Steam only gives requirements one game at a
  * time and allows about 200 such requests every five minutes, so the whole catalogue
  * takes days and each game is asked about once. Every crawl then copies the levels
@@ -24,23 +24,44 @@ interface SpecRow {
   disk: number | null;
   gpu: number | null;
   gpu_text: string;
+  rec_gpu: number | null;
+  rec_vram: number | null;
+  rec_gpu_text: string;
 }
 
 /** What we read for a Steam app; null when it was not read or said nothing usable. */
 export async function getSpecs(appid: number): Promise<Specs | null> {
-  const { rows } = await db().query<SpecRow>("SELECT ram, vram, disk, gpu, gpu_text FROM public.specs WHERE app_id = $1", [appid]);
+  const { rows } = await db().query<SpecRow>(
+    "SELECT ram, vram, disk, gpu, gpu_text, rec_gpu, rec_vram, rec_gpu_text FROM public.specs WHERE app_id = $1",
+    [appid],
+  );
   const r = rows[0];
-  if (!r || (r.ram === null && r.vram === null && r.disk === null && r.gpu === null && !r.gpu_text)) return null;
-  return { ram: r.ram, vram: r.vram, disk: r.disk, gpu: r.gpu, gpuText: r.gpu_text };
+  if (!r || (r.ram === null && r.vram === null && r.disk === null && r.gpu === null && !r.gpu_text && r.rec_gpu === null && !r.rec_gpu_text)) return null;
+  return { ram: r.ram, vram: r.vram, disk: r.disk, gpu: r.gpu, gpuText: r.gpu_text, recGpu: r.rec_gpu, recVram: r.rec_vram, recGpuText: r.rec_gpu_text };
 }
 
 /** Remember what an app's requirements say (null = nothing usable) and move the game to that level. */
 export async function saveSpecs(appid: number, specs: Specs | null): Promise<void> {
-  const level = specs ? levelFromSpecs(specs) : null;
+  let level: number | null = null;
+  if (specs) {
+    // Tags and age settle the requirements that land between light and medium.
+    const { rows } = await db().query<{ tags: string[]; release_date: number | null }>(
+      `SELECT d.tags, g.release_date FROM ${LIVE}.games g JOIN ${LIVE}.game_details d USING (id) WHERE g.steam_app_id = $1`,
+      [appid],
+    );
+    const game = rows[0];
+    level = levelFromSpecs(specs, {
+      flat: game ? isFlat(game.tags) : false,
+      year: game?.release_date ? new Date(game.release_date * 1000).getUTCFullYear() : null,
+    });
+  }
   await db().query(
-    `INSERT INTO public.specs (app_id, ram, vram, disk, gpu, gpu_text, level) VALUES ($1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT (app_id) DO UPDATE SET ram = $2, vram = $3, disk = $4, gpu = $5, gpu_text = $6, level = $7, read_at = now()`,
-    [appid, specs?.ram ?? null, specs?.vram ?? null, specs?.disk ?? null, specs?.gpu ?? null, specs?.gpuText ?? "", level],
+    `INSERT INTO public.specs (app_id, ram, vram, disk, gpu, gpu_text, level, rec_gpu, rec_vram, rec_gpu_text)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     ON CONFLICT (app_id) DO UPDATE SET ram = $2, vram = $3, disk = $4, gpu = $5, gpu_text = $6, level = $7,
+       rec_gpu = $8, rec_vram = $9, rec_gpu_text = $10, read_at = now()`,
+    [appid, specs?.ram ?? null, specs?.vram ?? null, specs?.disk ?? null, specs?.gpu ?? null, specs?.gpuText ?? "", level,
+     specs?.recGpu ?? null, specs?.recVram ?? null, specs?.recGpuText ?? ""],
   );
   if (level) await db().query(`UPDATE ${LIVE}.games SET power = $2, power_known = true WHERE steam_app_id = $1`, [appid, level]);
 }
@@ -66,13 +87,13 @@ async function fetchSpecs(appid: number): Promise<Specs | null | undefined | "wa
     });
     if (res.status === 429 || res.status === 403) return "wait";
     if (!res.ok) return undefined;
-    const body = (await res.json()) as Record<string, { data?: { pc_requirements?: { minimum?: string } | [] } }> | null;
+    const body = (await res.json()) as Record<string, { data?: { pc_requirements?: { minimum?: string; recommended?: string } | [] } }> | null;
     const entry = body?.[appid];
     if (!entry) return undefined;
     // Not sold in our region, or delisted: nothing to read, and no point asking again.
     const req = entry.data?.pc_requirements;
-    const minimum = req && !Array.isArray(req) ? req.minimum : undefined;
-    return minimum ? parseRequirements(minimum) : null;
+    if (!req || Array.isArray(req)) return null;
+    return req.minimum || req.recommended ? parseRequirements(req.minimum ?? "", req.recommended ?? "") : null;
   } catch {
     return undefined;
   }

@@ -241,8 +241,8 @@ export function Filters({ query, allTags, response, currency, specsRead, gameCou
         </ul>
         <p className="muted small">
           {specsRead >= gameCount * 0.9
-            ? "Worked out from each store page's minimum requirements."
-            : `Worked out from the store's minimum requirements for the ${formatCount(specsRead)} most reviewed games so far, and estimated from tags, age and price for the rest. More are read every day.`}
+            ? "Worked out from each store page's minimum and recommended requirements."
+            : `Worked out from the store's minimum and recommended requirements for the ${formatCount(specsRead)} most reviewed games so far, and estimated from tags, age and price for the rest. More are read every day.`}
         </p>
       </Section>
 

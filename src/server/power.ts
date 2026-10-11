@@ -99,12 +99,23 @@ export function gpuScores(line: string): number[] {
     if (n % 1000 === 0) return base; // "HD 7000 series"
     return base * (h >= 9 ? 1.9 : h >= 8 ? 1.3 : h >= 7 ? 0.8 : h >= 6 ? 0.5 : 0.3);
   });
+  // "Radeon HD 6XXX": a generation with no card named.
+  take(/\b(?:radeon\s+)?hd\s*-?(\d)xxx\b/gi, (m) => (Number(m[1]) >= 7 ? 1.6 : Number(m[1]) >= 6 ? 1.1 : Number(m[1]) >= 5 ? 0.9 : 0.5));
   take(/\b(?:x1\d{3}|radeon\s+x\d{3,4}|geforce\s*fx|tnt2|voodoo)\b/gi, () => 0.1);
   return scores;
 }
 
-export function parseRequirements(minimumHtml: string): Specs | null {
-  const lines = text(minimumHtml)
+interface Section {
+  ram: number | null;
+  vram: number | null;
+  disk: number | null;
+  gpu: number | null;
+  gpuText: string;
+}
+
+/** One block of requirements (the minimum, or the recommended). */
+function readSection(html: string): Section | null {
+  const lines = text(html)
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
@@ -131,31 +142,74 @@ export function parseRequirements(minimumHtml: string): Specs | null {
   };
 }
 
-/** Level from the graphics card alone, if the requirements named one or gave its memory. */
-function graphicsLevel(s: Specs): PowerLevel | null {
-  if (s.gpu !== null) return s.gpu < 1.5 ? 1 : s.gpu < 5.5 ? 2 : 3;
-  // Video memory alone is a looser hint than a named card, so it takes more to call it demanding.
-  if (s.vram !== null) return s.vram <= 1 ? 1 : s.vram < 6 ? 2 : 3;
+export function parseRequirements(minimumHtml: string, recommendedHtml = ""): Specs | null {
+  const min = readSection(minimumHtml);
+  const rec = readSection(recommendedHtml);
+  if (!min && !rec) return null;
+  return {
+    ram: min?.ram ?? null,
+    vram: min?.vram ?? null,
+    disk: min?.disk ?? rec?.disk ?? null,
+    gpu: min?.gpu ?? null,
+    gpuText: min?.gpuText ?? "",
+    recGpu: rec?.gpu ?? null,
+    recVram: rec?.vram ?? null,
+    recGpuText: rec?.gpuText ?? "",
+  };
+}
+
+/** A card of roughly that much video memory, for requirements that name no card. */
+const cardForVram = (gb: number) => (gb <= 0.5 ? 0.3 : gb <= 1 ? 1 : gb <= 2 ? 2.5 : gb <= 3 ? 4 : gb <= 4 ? 5 : gb <= 6 ? 7 : 9);
+const card = (gpu: number | null, vram: number | null) => gpu ?? (vram !== null ? cardForVram(vram) : null);
+
+/**
+ * The card a game really wants, on the GTX 1060 = 6 scale: halfway (geometrically)
+ * between the minimum and the recommended one.
+ *
+ * The minimum alone flatters: it is the card on which the game starts, at the lowest
+ * settings. Divinity: Original Sin 2 lists a GTX 550 as minimum and a GTX 770 as
+ * recommended, and nobody would call it a light game. When only one of the two is
+ * given, the other is assumed to sit at the usual distance (recommended cards are
+ * about twice the minimum).
+ */
+export function wantedCard(s: Specs): number | null {
+  const min = card(s.gpu, s.vram);
+  const rec = card(s.recGpu, s.recVram);
+  if (min !== null && rec !== null) return Math.sqrt(min * Math.max(min, rec));
+  if (min !== null) return min * 1.4;
+  if (rec !== null) return rec * 0.7;
   return null;
 }
 
+/** What else we know about the game, for requirements that land between light and medium. */
+export interface PowerHints {
+  /** A 2D game by its tags (see isFlat). */
+  flat?: boolean;
+  /** Release year. */
+  year?: number | null;
+}
+
 /**
- * The level the minimum requirements point to, or null when they say too little.
- * The graphics card decides and memory only nudges; disk space says nothing about power. Memory alone is a poor
- * guide (plenty of small 2D games ask for 8 GB), so without a card it only settles
- * the clear cases.
+ * The level the requirements point to, or null when they say too little.
+ *
+ * Under a GTX 650-ish card it is light; from about a GTX 960 with a GTX 1060
+ * recommended it is demanding. Just above the light line, publishers of 2D and of old
+ * games routinely ask for more than the game uses (Hollow Knight "recommends" a GTX
+ * 950), so there a 2D or pre-2012 game is still light and anything else is medium.
+ * Memory only nudges, and disk space says nothing about power.
  */
-export function levelFromSpecs(s: Specs): PowerLevel | null {
-  let level = graphicsLevel(s);
-  if (level === null) {
+export function levelFromSpecs(s: Specs, hints: PowerHints = {}): PowerLevel | null {
+  const want = wantedCard(s);
+  if (want === null) {
+    // Memory alone is a poor guide (plenty of small 2D games ask for 8 GB), so it only settles the clear cases.
     if (s.ram === null) return null;
     if (s.ram <= 2) return 1;
     if (s.ram >= 16) return 3;
     return null;
   }
+  const modest = hints.flat || (hints.year != null && hints.year < 2012);
+  let level: number = want < 1.2 ? 1 : want < 2.2 ? (modest ? 1 : 2) : want < 4.5 ? 2 : 3;
   if (s.ram !== null && s.ram >= 16 && level < 3) level++;
-  // "Any card with 1 GB" next to 8 GB of memory is a modern game being vague, not a light one.
-  if (s.ram !== null && s.ram >= 8 && level === 1 && s.gpu === null) level = 2;
   return level as PowerLevel;
 }
 
@@ -176,6 +230,18 @@ const HEAVY_TAGS: Record<string, number> = {
   hunting: 1.5, "space sim": 1, military: 0.7, "action-adventure": 0.6, "hack and slash": 0.5, "survival horror": 0.7,
   "walking simulator": 0.7, driving: 0.8, "3d fighter": 1, "3d platformer": 0.5, sandbox: 0.3, destruction: 1,
 };
+
+/** Whether the tags describe a 2D game: clearly more "flat" signals than "3D world" ones. */
+export function isFlat(tags: string[]): boolean {
+  let light = 0;
+  let heavy = 0;
+  tags.forEach((tag, rank) => {
+    const weight = rank < 6 ? 1 : 0.6;
+    light += (LIGHT_TAGS[tag.toLowerCase()] ?? 0) * weight;
+    heavy += (HEAVY_TAGS[tag.toLowerCase()] ?? 0) * weight;
+  });
+  return light >= 3 && light > heavy;
+}
 
 /**
  * A guess from what we already know: tags, age and price. Flat, small and old games

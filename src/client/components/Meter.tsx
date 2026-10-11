@@ -17,7 +17,7 @@ export function PowerBadge({ level, known }: { level: PowerLevel; known: boolean
   return (
     <span
       className={`badge power ${known ? "" : "guess"}`}
-      title={`${p.hint}. ${known ? "From the store's minimum requirements." : "Estimated from tags, age and price; requirements not read yet."}`}
+      title={`${p.hint}. ${known ? "From the store's minimum and recommended requirements." : "Estimated from tags, age and price; requirements not read yet."}`}
     >
       <Meter level={level} />
       {p.label}
