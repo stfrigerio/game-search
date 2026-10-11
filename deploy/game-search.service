@@ -1,20 +1,30 @@
-# Web server: answers searches from Postgres. Holds no catalogue in memory.
+# game-search on lince: the Node server behind Caddy (gamesearch.manong.app).
+# A USER unit of lince, like the other small apps there: no root, lingering keeps it up.
+# Lives in ~/.config/systemd/user/ and is driven with `systemctl --user`.
+#
+# /srv/game-search/app              the release, replaced by the Deploy workflow with rsync
+# /srv/game-search/game-search.env  DATABASE_URL and friends (chmod 600), kept across releases
+#
+# Searches are answered from Postgres; this process holds no catalogue (~80 MB).
+# The catalogue is rebuilt by game-search-crawl.timer.
 [Unit]
-Description=Game Search web server
-After=network-online.target postgresql.service
-Wants=network-online.target
+Description=game-search - cross-store game search
+After=network-online.target
 
 [Service]
 Type=simple
-User=game-search
-WorkingDirectory=/opt/game-search
-EnvironmentFile=/etc/game-search.env
+WorkingDirectory=/srv/game-search/app
+EnvironmentFile=/srv/game-search/game-search.env
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/env node --max-old-space-size=192 dist-server/index.js
+Environment=PORT=5330
+Environment=HOST=127.0.0.1
+ExecStart=/usr/bin/node --max-old-space-size=192 dist-server/index.js
 Restart=on-failure
 RestartSec=5
-# Normally ~100 MB; the cap makes a regression fail loudly instead of squeezing the box.
+NoNewPrivileges=true
+# Normally ~80 MB; the cap makes a regression fail loudly instead of squeezing the box.
 MemoryMax=384M
+Nice=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

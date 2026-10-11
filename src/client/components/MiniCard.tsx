@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { GameSummary } from "../../shared/types.ts";
 import { reviewLabel } from "../format.ts";
+import { HEART, Pixel } from "../pixel.tsx";
 import { Price } from "./ResultCard.tsx";
 import { SaveButton } from "./SaveButton.tsx";
 
@@ -17,13 +18,21 @@ export function MiniCard({ game, currency, onOpen }: { game: GameSummary; curren
           <div className="no-image">{game.name}</div>
         )}
         <SaveButton id={game.id} />
+        <Price game={game} currency={currency} />
       </div>
       <div className="mini-name" title={game.name}>
         {game.name}
       </div>
       <div className="mini-meta">
-        <span className={`tone-${review.tone}`}>{game.reviewCount >= 10 ? `${game.reviewPct}%` : "—"}</span>
-        <Price game={game} currency={currency} />
+        {game.reviewCount >= 10 ? (
+          <span className={`liked tone-${review.tone}`} title={`${review.label}: ${game.reviewPct}% of ${game.reviewCount.toLocaleString()} reviews positive`}>
+            <Pixel art={HEART} size={2} />
+            {game.reviewPct}%
+          </span>
+        ) : (
+          <span className="muted">Too new to tell</span>
+        )}
+        {game.tags[0] && <span className="mini-tag">{game.tags[0]}</span>}
       </div>
     </article>
   );

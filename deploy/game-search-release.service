@@ -1,0 +1,12 @@
+# Started by game-search-release.path after each deploy: apply database migrations,
+# restart the server, and start a crawl if the catalogue is missing or was built by
+# an older schema.
+[Unit]
+Description=game-search - restart on a new release
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/game-search/app
+EnvironmentFile=/srv/game-search/game-search.env
+ExecStart=/bin/sh -c '/usr/bin/node dist-server/migrate-cli.js --check || /usr/bin/systemctl --user start --no-block game-search-crawl.service'
+ExecStart=/usr/bin/systemctl --user restart game-search.service

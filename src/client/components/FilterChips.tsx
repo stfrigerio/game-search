@@ -81,8 +81,7 @@ export function ActiveFilters({
     <div className="active-filters">
       {chips.map((c) => (
         <button key={c.label} className={`chip ${c.negative ? "chip-exclude" : "chip-include"}`} onClick={() => onChange(c.clear)} title="Remove filter">
-          {c.negative ? "− " : ""}
-          {c.label} ×
+          {c.label} <span className="x">×</span>
         </button>
       ))}
       {chips.length > 1 && (

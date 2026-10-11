@@ -42,19 +42,20 @@ export function TagPicker({ allTags, included, excluded, onInclude, onExclude, o
       <div className="chips">
         {included.map((t) => (
           <button key={t} className="chip chip-include" onClick={() => onRemove(t)} title="Remove">
-            + {t} ×
+            {t} <span className="x">×</span>
           </button>
         ))}
         {excluded.map((t) => (
           <button key={t} className="chip chip-exclude" onClick={() => onRemove(t)} title="Remove">
-            − {t} ×
+            {t} <span className="x">×</span>
           </button>
         ))}
       </div>
       <div className="tag-input-wrap">
         <input
           type="search"
-          placeholder="Add a tag… (Shift+Enter to exclude)"
+          placeholder="Add a tag"
+          title="Enter adds the tag, Shift+Enter excludes it"
           value={text}
           onChange={(e) => {
             setText(e.target.value);

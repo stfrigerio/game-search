@@ -1,15 +1,26 @@
-# Deploying on a droplet with Postgres
+# Deploying on lince (Postgres version)
 
-The web server answers searches from Postgres and needs ~100 MB. The catalogue is
-rebuilt nightly by a separate one-shot job (~8 minutes, ~500 MB peak) that writes to a
-staging schema and swaps it in, so the site never sees a half-built catalogue.
+The site runs as systemd **user** units of lince under `/srv/game-search`, behind Caddy,
+and is deployed by `.github/workflows/deploy.yml` on every push to `main`.
 
-Paths below assume the app lives in `/opt/game-search` and runs as user `game-search`.
-Adjust the unit files if yours differ (e.g. match your existing `game-search.service`).
+What runs:
 
-## 1. Database (once)
+| Unit | What | Memory |
+| --- | --- | --- |
+| `game-search.service` | web server, answers searches from Postgres | ~80 MB (cap 384M) |
+| `game-search-crawl.service` + `.timer` | nightly catalogue rebuild, ~8 min | ~330 MB peak (cap 768M) |
+| `game-search-release.path` + `.service` | after each deploy: migrate, restart, crawl if needed | — |
 
-As the postgres superuser (`sudo -u postgres psql`):
+The catalogue lives in its own database, `game_search` (~400 MB on disk; the part searches
+scan is ~70 MB and stays in Postgres' cache).
+
+## One-time setup — do this BEFORE merging to `main`
+
+Deploys replace the app folder but not the unit files in `~/.config/systemd/user/`. The
+old unit starts `src/server/index.ts` with tsx, which this version no longer ships, so a
+deploy that lands before the units are updated leaves the site down until they are.
+
+### 1. Database (as the postgres superuser: `sudo -u postgres psql`)
 
 ```sql
 CREATE ROLE game_search LOGIN PASSWORD '<pick one>';
@@ -18,67 +29,60 @@ CREATE DATABASE game_search OWNER game_search;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 ```
 
-The database only holds data rebuilt by the crawl (~400 MB on disk), so **leave it out
-of backups**. With `pg_dumpall` (Postgres 16+): `pg_dumpall --exclude-database=game_search`.
-With per-database `pg_dump`, just don't add it.
+Everything in it is rebuilt by the crawl, so **leave it out of the nightly backup**:
+with `pg_dumpall` (Postgres 16+) add `--exclude-database=game_search`; with per-database
+`pg_dump`, just don't add it.
 
-## 2. Config
-
-```sh
-sudo cp deploy/game-search.env.example /etc/game-search.env
-sudo chmod 600 /etc/game-search.env && sudo chown game-search /etc/game-search.env
-sudo nano /etc/game-search.env    # set the password in DATABASE_URL
-```
-
-## 3. Build
+### 2. Config file (as the lince user)
 
 ```sh
-cd /opt/game-search
-git pull
-npm ci
-npm run build          # dist/ (front-end) and dist-server/ (server, crawler, migrate)
-npm prune --omit=dev   # optional: runtime needs only express and pg
+cp deploy/game-search.env.example /srv/game-search/game-search.env
+chmod 600 /srv/game-search/game-search.env
+nano /srv/game-search/game-search.env      # put the password in DATABASE_URL
 ```
 
-## 4. Switch the services
+### 3. Units (as the lince user)
 
 ```sh
-sudo systemctl stop game-search
-sudo cp deploy/game-search.service deploy/game-search-crawl.service deploy/game-search-crawl.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-
-# Create tables, then build the first catalogue (blocks for ~8 minutes).
-sudo -u game-search bash -c 'set -a; . /etc/game-search.env; node dist-server/migrate-cli.js'
-sudo systemctl start game-search-crawl
-journalctl -u game-search-crawl -n 20    # ends with "Catalogue refreshed: … games" and "Peak memory: … MB"
-
-sudo systemctl enable --now game-search game-search-crawl.timer
-systemctl list-timers game-search-crawl.timer
+cp deploy/game-search.service deploy/game-search-crawl.service deploy/game-search-crawl.timer \
+   deploy/game-search-release.service deploy/game-search-release.path ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable game-search-crawl.timer game-search-release.path
 ```
 
-The old in-memory catalogue file is no longer used: `rm -rf /opt/game-search/data`.
+The units call `/usr/bin/node`; if `which node` says otherwise, edit the `ExecStart` lines.
 
-If `node` isn't on systemd's default PATH (e.g. installed with nvm), replace
-`/usr/bin/env node` in both service files with the full path from `which node`.
+### 4. Merge to `main`
 
-## 5. Check
+The Deploy workflow runs the tests (including the database ones, against a throwaway
+Postgres), builds, and rsyncs the release. On the box, `game-search-release.service` then:
 
-```sh
-curl -s localhost:3001/api/meta | head -c 300; echo
-systemctl status game-search          # Memory: ~70-120M
-```
+1. runs the migrations (`node dist-server/migrate-cli.js --check`),
+2. sees the catalogue is empty and starts `game-search-crawl.service` in the background,
+3. restarts the server.
+
+The site shows "Stocking the shelves" with live progress for ~8 minutes, then fills in.
+Follow along with `journalctl --user -u game-search-crawl -f`; it ends with
+`Catalogue refreshed: … games` and `Peak memory: … MB`.
+
+### 5. Clean up
+
+The old catalogue snapshot isn't used any more: `rm -rf /srv/game-search/data`.
 
 ## Day to day
 
-- Crawl now: `sudo systemctl start game-search-crawl`
-- Crawl status/progress: `journalctl -u game-search-crawl -f`, or the `public.crawl_status` table
-- Only refresh player counts: `node dist-server/crawl-cli.js --players` (with the env loaded)
-- After deploying a version whose release notes mention a new catalogue schema, run a crawl;
-  `node dist-server/migrate-cli.js` warns when one is needed.
-- A failed crawl leaves the previous catalogue live; the timer tries again the next night.
+- Crawl now: `systemctl --user start game-search-crawl`
+- Next scheduled crawl: `systemctl --user list-timers game-search-crawl.timer`
+- Only refresh player counts:
+  `cd /srv/game-search/app && set -a && . ../game-search.env && node dist-server/crawl-cli.js --players`
+- A failed crawl leaves the previous catalogue live (the site shows the error); the timer
+  tries again the next night.
+- A release that changes the catalogue tables starts a crawl by itself (the catalogue
+  records its schema version).
 
 ## Rolling back
 
-The previous, in-memory version is the commit before "Move the catalogue to Postgres".
-Check it out, `npm ci && npm run build`, and restore the old unit file. It ignores the
-database.
+Revert the "Move the catalogue to Postgres" merge on `main` and restore the previous
+`game-search.service` (it ran `node --import tsx src/server/index.ts` with
+`DATA_FILE=/srv/game-search/data/catalog.json.gz`). The database can stay; the old
+version ignores it.

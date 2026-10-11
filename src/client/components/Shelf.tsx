@@ -37,10 +37,10 @@ export function Shelf({ title, subtitle, query, ids, currency, onOpen, onSeeAll 
       <div className="shelf-head">
         <div>
           <h2>{title}</h2>
-          <p className="muted small">{subtitle}</p>
+          <p className="muted">{subtitle}</p>
         </div>
         <button className="link-button" onClick={onSeeAll}>
-          See all{total ? ` ${total.toLocaleString()}` : ""} →
+          See all{total ? ` ${total.toLocaleString()}` : ""}
         </button>
       </div>
       <div className="shelf-row">

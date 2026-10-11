@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { createServer } from "node:http";
 import { resolve } from "node:path";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { parseQuery } from "../shared/query.ts";
@@ -134,7 +135,9 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-const server = app.listen(config.port, () => console.log(`API listening on http://localhost:${config.port}`));
+const server = createServer(app).listen({ port: config.port, host: config.host }, () =>
+  console.log(`API listening on http://${config.host ?? "localhost"}:${config.port}`),
+);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {

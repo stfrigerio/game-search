@@ -92,6 +92,7 @@ is rebuilt by a separate nightly job, `node dist-server/crawl-cli.js`; see
 | ---------------- | ------- | --------------------------------------------------------- |
 | `DATABASE_URL`   | —       | Postgres connection string (required)                     |
 | `PORT`           | `3001`  | API/server port                                           |
+| `HOST`           | all     | Interface to listen on, e.g. `127.0.0.1` behind a proxy   |
 | `STORE_COUNTRY`  | `US`    | Region for Steam/GOG prices (crawler)                     |
 | `STORE_CURRENCY` | `USD`   | Currency for that region; GOG needs it spelled out        |
 | `CRAWL_LIMIT`    | unset   | Cap games per store, for fast local experiments (`5000`)  |

@@ -1,19 +1,22 @@
-# Nightly catalogue rebuild (Steam, GOG, SteamSpy) into Postgres. Started by
-# game-search-crawl.timer; run by hand with: systemctl start game-search-crawl
+# Rebuilds the game catalogue in Postgres: Steam, GOG, then SteamSpy player counts.
+# ~8 minutes, mostly waiting on the stores; peaks around 330 MB. Writes to a staging
+# schema and swaps it in at the end, so the site never sees a half-built catalogue
+# and a failed crawl leaves yesterday's live.
+# Started nightly by game-search-crawl.timer, after a release that needs it, or by hand:
+#   systemctl --user start game-search-crawl     (follow with: journalctl --user -u game-search-crawl -f)
 [Unit]
-Description=Game Search catalogue crawl
-After=network-online.target postgresql.service
-Wants=network-online.target
+Description=game-search - catalogue crawl
+After=network-online.target
 
 [Service]
 Type=oneshot
-User=game-search
-WorkingDirectory=/opt/game-search
-EnvironmentFile=/etc/game-search.env
+WorkingDirectory=/srv/game-search/app
+EnvironmentFile=/srv/game-search/game-search.env
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/env node --max-old-space-size=640 dist-server/crawl-cli.js
-# Peaks around 500 MB; ~8 minutes, mostly waiting on the stores' APIs.
-MemoryMax=1G
+ExecStart=/usr/bin/node --max-old-space-size=512 dist-server/crawl-cli.js
 TimeoutStartSec=2h
+NoNewPrivileges=true
+MemoryMax=768M
+# Yield CPU and disk to the production services on the box.
 Nice=10
 IOSchedulingClass=idle

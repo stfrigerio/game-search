@@ -2,6 +2,8 @@ const env = process.env;
 
 export const config = {
   port: Number(env.PORT ?? 3001),
+  /** Interface to listen on; unset means all of them. Set 127.0.0.1 behind a reverse proxy. */
+  host: env.HOST,
 };
 
 export const crawlerConfig = {

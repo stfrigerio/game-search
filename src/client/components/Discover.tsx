@@ -1,8 +1,11 @@
+import type { CSSProperties } from "react";
 import { DEFAULT_QUERY, type SearchQuery } from "../../shared/query.ts";
 import { useSavedList } from "../savedList.ts";
+import { Gacha } from "./Gacha.tsx";
 import { Shelf } from "./Shelf.tsx";
 
 interface Props {
+  gameCount: number;
   currency: string;
   onOpen: (id: string) => void;
   onSearch: (query: Partial<SearchQuery>) => void;
@@ -54,11 +57,34 @@ export const SHELVES: { title: string; subtitle: string; query: Partial<SearchQu
   },
 ];
 
-export function Discover({ currency, onOpen, onSearch, onOpenList }: Props) {
+export function Discover({ gameCount, currency, onOpen, onSearch, onOpenList }: Props) {
   const list = useSavedList();
   const onSale: Partial<SearchQuery> = { sort: "deal", discounted: true };
   return (
     <div className="discover">
+      <section className="hero">
+        <div className="hero-copy">
+          <h1 aria-label="Find a game worth your evening">
+            {"Find a game worth your evening".split(" ").flatMap((word, i) => [
+              <span key={i} aria-hidden="true" style={{ "--i": i } as CSSProperties}>
+                {word}
+              </span>,
+              " ",
+            ])}
+          </h1>
+          <p className="lede">
+            {gameCount.toLocaleString()} games from Steam and GOG in one search. Filter by what you care about, then see
+            which shop sells it cheapest.
+          </p>
+          <div className="hero-actions">
+            <button className="primary" onClick={() => onSearch({ sort: "rating" })}>
+              Browse everything
+            </button>
+            <button onClick={() => onSearch({ sort: "deal", discounted: true, minReviews: 200 })}>See what's on sale</button>
+          </div>
+        </div>
+        <Gacha currency={currency} onOpen={onOpen} />
+      </section>
       {list.ids.length > 0 && (
         <Shelf
           title="On sale from your list"
