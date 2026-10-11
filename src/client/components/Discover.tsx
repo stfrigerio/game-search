@@ -36,6 +36,11 @@ export const SHELVES: { title: string; subtitle: string; query: Partial<SearchQu
     query: { sort: "rating", minPct: 95, minReviews: 50, maxReviews: 1000 },
   },
   {
+    title: "Runs on a potato",
+    subtitle: "Loved games that need next to no computer",
+    query: { sort: "rating", power: ["low"], minReviews: 1000 },
+  },
+  {
     title: "Best of the past year",
     subtitle: `Top rated games released since ${year - 1}`,
     query: { sort: "rating", minYear: year - 1, minReviews: 200 },

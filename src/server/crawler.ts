@@ -6,6 +6,7 @@ import { createCatalogIndexes, createCatalogTables, LIVE, migrateBase, SCHEMA_VE
 import { absorb, TitleMatcher } from "./merge.ts";
 import { crawlSteam, OTHER_SOURCES, type CrawlOptions } from "./sources/index.ts";
 import { crawlSteamSpy } from "./sources/steamspy.ts";
+import { applySpecs } from "./specs.ts";
 
 // Only one crawl at a time, across processes.
 const LOCK_ID = 727_274_001;
@@ -139,6 +140,7 @@ export async function finishStaging(client: pg.ClientBase, tags: { id: number; n
           SELECT unnest(store_ids) AS s, count(*) AS n FROM ${STAGING}.games GROUP BY 1) x), '{}'::jsonb))`,
     [currency, SCHEMA_VERSION],
   );
+  await applySpecs(STAGING, client);
   await createCatalogIndexes(client, STAGING);
   await client.query(`ANALYZE ${STAGING}.games`);
   await client.query(`ANALYZE ${STAGING}.game_details`);

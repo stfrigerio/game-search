@@ -1,5 +1,6 @@
 import { CONTENT_FILTERS, FEATURES, LANGUAGES } from "../shared/features.ts";
 import type { Game, GameSummary, StoreListing } from "../shared/types.ts";
+import { estimateLevel } from "./power.ts";
 
 /**
  * SteamDB's rating formula: pulls the positive share towards 50% when there are
@@ -47,6 +48,9 @@ export function summarize(game: Game): GameSummary {
     peakPlayers: game.peakPlayers ?? null,
     free: game.stores.some((s) => s.free),
     stores: game.stores.map((s) => s.store),
+    // An estimate; the catalogue replaces it with the level read from requirements.
+    power: estimateLevel(game),
+    powerKnown: false,
   };
 }
 

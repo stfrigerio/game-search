@@ -8,6 +8,7 @@ import { config } from "./config.ts";
 import { closeDb } from "./db/pool.ts";
 import { existingIds, getGameDetail, getGames, getMeta, PAGE_SIZE, searchGames, similarGames } from "./db/search.ts";
 import { getPrices, getPricesBatch } from "./prices.ts";
+import { readSpecsForever } from "./specs.ts";
 import { fetchWishlist, resolveSteamId } from "./steam-profile.ts";
 
 // The catalogue lives in Postgres (DATABASE_URL) and is rebuilt by `npm run crawl`
@@ -138,6 +139,9 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 const server = createServer(app).listen({ port: config.port, host: config.host }, () =>
   console.log(`API listening on http://${config.host ?? "localhost"}:${config.port}`),
 );
+
+// Power levels come from Steam's system requirements, read a game at a time in the background.
+if (config.specsPauseMs > 0) void readSpecsForever(config.specsPauseMs);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {

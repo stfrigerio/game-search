@@ -1,3 +1,5 @@
+import type { PowerKey, PowerLevel, Specs } from "./power.ts";
+
 export type StoreId = "steam" | "gog";
 
 /** One store's page for a game. Prices are in the smallest currency unit (cents). */
@@ -82,6 +84,9 @@ export interface GameSummary {
   peakPlayers: number | null;
   free: boolean;
   stores: StoreId[];
+  /** How strong a computer it needs, and whether that comes from the store's requirements or is our guess. */
+  power: PowerLevel;
+  powerKnown: boolean;
 }
 
 export interface SearchResponse {
@@ -94,6 +99,8 @@ export interface SearchResponse {
   /** For each feature key / language code, how many matches have it. */
   featureCounts: Record<string, number>;
   languageCounts: Record<string, number>;
+  /** How many matches sit at each power level, before the power filter itself is applied. */
+  powerCounts: Record<PowerKey, number>;
   tookMs: number;
 }
 
@@ -105,6 +112,8 @@ export interface CatalogStatus {
   progress: string | null;
   currency: string;
   lastError: string | null;
+  /** Games whose power level comes from the store's requirements rather than a guess. */
+  specsRead: number;
 }
 
 export interface MetaResponse extends CatalogStatus {
@@ -153,4 +162,6 @@ export interface GameDetailResponse {
   summary: GameSummary;
   features: string[];
   languages: { code: string; audio: boolean }[];
+  /** The store's minimum requirements, when we have read them. */
+  specs: Specs | null;
 }

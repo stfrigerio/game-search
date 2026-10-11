@@ -1,4 +1,5 @@
 import type pg from "pg";
+import type { PowerLevel } from "../../shared/power.ts";
 import type { DeckCompat, Game, GameSummary, StoreId, StoreListing } from "../../shared/types.ts";
 import { contentMask, dealScore, featureMask, languageMask, summarize } from "../derive.ts";
 import { titleKey } from "../merge.ts";
@@ -7,6 +8,7 @@ const GAME_COLUMNS = [
   "id", "search_name", "people", "people_list", "tag_ids", "release_date", "coming_soon", "early_access", "platforms", "deck",
   "features", "langs", "audio", "content", "peak_players", "steam_app_id", "store_ids", "review_count", "review_pct",
   "rating", "best_price", "best_base_price", "best_discount", "best_discount_ends", "best_store", "free", "deal_score",
+  "power", "power_known",
 ] as const;
 
 const DETAIL_COLUMNS = [
@@ -47,6 +49,9 @@ function gameValues(g: Game, tagId: (tag: string) => number): [unknown[], unknow
       s.bestStore,
       s.free,
       dealScore(s),
+      // The estimate; finishStaging overwrites it where requirements have been read.
+      s.power,
+      false,
     ],
     [
       g.id,
@@ -66,7 +71,7 @@ function gameValues(g: Game, tagId: (tag: string) => number): [unknown[], unknow
   ];
 }
 
-const BATCH = 500; // 26 columns x 500 rows stays well under Postgres' 65k parameter limit
+const BATCH = 500; // 29 columns x 500 rows stays well under Postgres' 65k parameter limit
 
 async function insertRows(client: pg.ClientBase, table: string, columns: readonly string[], rows: unknown[][]) {
   const params: unknown[] = [];
@@ -96,7 +101,7 @@ export const fullGame = (schema: string) => `${schema}.games g JOIN ${schema}.ga
 export const SUMMARY_COLUMNS =
   "g.id, d.name, d.image, d.tags[1:8] AS tags, d.developers, g.release_date, g.coming_soon, g.early_access, " +
   "g.platforms, g.deck, g.review_count, g.review_pct, g.rating, g.best_price, g.best_base_price, g.best_discount, " +
-  "g.best_discount_ends, g.best_store, g.peak_players, g.free, g.store_ids";
+  "g.best_discount_ends, g.best_store, g.peak_players, g.free, g.store_ids, g.power, g.power_known";
 
 export interface GameRow {
   id: string;
@@ -132,6 +137,8 @@ export interface GameRow {
   best_discount_ends: number | null;
   best_store: StoreId | null;
   free: boolean;
+  power: number;
+  power_known: boolean;
 }
 
 const platformsOf = (bits: number) => ({ windows: (bits & 1) !== 0, mac: (bits & 2) !== 0, linux: (bits & 4) !== 0 });
@@ -159,6 +166,8 @@ export function rowToSummary(r: GameRow): GameSummary {
     peakPlayers: r.peak_players,
     free: r.free,
     stores: r.store_ids,
+    power: r.power as PowerLevel,
+    powerKnown: r.power_known,
   };
 }
 

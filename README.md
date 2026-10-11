@@ -18,6 +18,8 @@ across official stores and key resellers (G2A, Kinguin, Eneba, Instant Gaming, â
   90% off a bad one.
 - **Lots of filters, each with live counts** of how many results have it:
   - **Reviews**: % positive and number of reviews (min and max, for hidden gems)
+  - **Computer needed**: light, medium or demanding, from each game's minimum system
+    requirements (see [below](#computer-needed-light--medium--demanding))
   - **Players**: how many are playing now (Steam peak yesterday, via SteamSpy) and game
     modes: single-player, multiplayer, co-op, online / local split-screen / LAN co-op,
     PvP, MMO, cross-platform, Remote Play Together
@@ -97,6 +99,7 @@ is rebuilt by a separate nightly job, `node dist-server/crawl-cli.js`; see
 | `STORE_CURRENCY` | `USD`   | Currency for that region; GOG needs it spelled out        |
 | `CRAWL_LIMIT`    | unset   | Cap games per store, for fast local experiments (`5000`)  |
 | `SKIP_STEAMSPY`  | unset   | `1` skips the ~5 min SteamSpy player-count crawl          |
+| `SPECS_PAUSE_MS` | `1600`  | Pause between system-requirement requests; `0` turns them off |
 | `DB_POOL_SIZE`   | `6`     | Max Postgres connections from the web server              |
 
 E.g. `STORE_COUNTRY=IT STORE_CURRENCY=EUR npm run crawl` for Italian euro prices.
@@ -164,6 +167,27 @@ adding [IGDB](https://api-docs.igdb.com/) as a source would cover them but needs
 **About key resellers:** G2A, Kinguin, Eneba and similar sites sell keys on a grey
 market. They're often cheaper, but the developer may not be paid and keys are
 occasionally revoked. The UI labels them separately from official stores.
+
+### Computer needed (light / medium / demanding)
+
+Every game has a power level, shown as a three-bar meter and filterable with `power=low,mid,high`:
+
+- **Light**: runs on almost anything, integrated graphics included.
+- **Medium**: wants a graphics card, an older one will do (roughly GTX 660 to GTX 1050 Ti).
+- **Demanding**: wants a recent gaming PC (minimum of a GTX 970 / 1060 / RX 480 or better).
+
+The level comes from the store's **minimum requirements**. The catalogue APIs don't carry
+them, so the web server reads them from Steam's `appdetails` one game at a time in the
+background (most reviewed games first, one request every 1.6 s to stay under Steam's limit
+of about 200 per five minutes) and keeps them in `public.specs`, which crawls don't
+rebuild. Reading all ~190k games takes a few days; the first tens of thousands, which
+are the games people actually look for, take one.
+
+`src/server/power.ts` picks the graphics card, video memory and RAM out of the free text
+and decides the level: the card decides, memory only nudges, disk space is ignored. Until
+a game has been read (and for GOG-only games) the level is an **estimate** from tags, age
+and price, drawn with a dashed edge. On a sample of games with requirements the estimate
+agreed with them about 4 times in 5 and was never off by two levels.
 
 ## Development
 

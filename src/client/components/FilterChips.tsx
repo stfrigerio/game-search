@@ -1,4 +1,5 @@
 import { CONTENT_FILTERS, FEATURE_BY_KEY, LANGUAGE_BY_CODE } from "../../shared/features.ts";
+import { POWER_BY_KEY } from "../../shared/power.ts";
 import { DEFAULT_QUERY, type SearchQuery } from "../../shared/query.ts";
 import { formatCount, STORE_NAMES } from "../format.ts";
 
@@ -49,6 +50,9 @@ export function describeFilters(q: SearchQuery, currency: string): Chip[] {
   }
   for (const p of q.platforms) {
     chips.push({ label: p === "mac" ? "macOS" : p[0].toUpperCase() + p.slice(1), clear: { platforms: q.platforms.filter((x) => x !== p) } });
+  }
+  for (const p of q.power) {
+    chips.push({ label: `${POWER_BY_KEY.get(p)?.label ?? p} on hardware`, clear: { power: q.power.filter((x) => x !== p) } });
   }
   if (q.deck) chips.push({ label: q.deck === 3 ? "Deck Verified" : "Deck Playable+", clear: { deck: 0 } });
   if (q.lang) {
@@ -117,6 +121,11 @@ const QUICK: { label: string; on: (q: SearchQuery) => boolean; toggle: (q: Searc
   },
   { label: "On sale", on: (q) => q.discounted, toggle: (_q, on) => ({ discounted: !on, minDiscount: null }) },
   { label: "Under 10", on: (q) => q.maxPrice === 10, toggle: (_q, on) => ({ maxPrice: on ? null : 10 }) },
+  {
+    label: "Runs on anything",
+    on: (q) => q.power.length === 1 && q.power[0] === "low",
+    toggle: (_q, on) => ({ power: on ? [] : ["low"] }),
+  },
   { label: "Deck Verified", on: (q) => q.deck === 3, toggle: (_q, on) => ({ deck: on ? 0 : 3 }) },
   {
     label: "Controller",

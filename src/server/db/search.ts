@@ -1,8 +1,10 @@
 import { CONTENT_FILTERS, FEATURES, LANGUAGE_BY_CODE, LANGUAGES } from "../../shared/features.ts";
+import { POWER, type PowerLevel } from "../../shared/power.ts";
 import type { SearchQuery } from "../../shared/query.ts";
 import type { CatalogStatus, Game, GameDetailResponse, GameSummary, MetaResponse, SearchResponse } from "../../shared/types.ts";
 import { featureKeysOf, languagesOf, summarize } from "../derive.ts";
 import { titleKey } from "../merge.ts";
+import { getSpecs, specsEpoch } from "../specs.ts";
 import { db } from "./pool.ts";
 import { fullGame, rowToGame, rowToSummary, SUMMARY_COLUMNS, type GameRow } from "./rows.ts";
 import { LIVE } from "./schema.ts";
@@ -21,17 +23,19 @@ interface CatalogInfo {
   currency: string;
   storeCounts: Record<string, number>;
   gameCount: number;
+  specsRead: number;
   loadedAt: number;
 }
 
 let info: Promise<CatalogInfo> | null = null;
 
 async function loadInfo(): Promise<CatalogInfo> {
-  const [tags, meta, count] = await Promise.all([
+  const [tags, meta, count, known] = await Promise.all([
     db().query<{ id: number; name: string; count: number }>(`SELECT id, name, count FROM ${LIVE}.tags ORDER BY count DESC`),
     db().query<{ key: string; value: unknown }>(`SELECT key, value FROM ${LIVE}.meta`),
     // The planner's estimate is plenty for "195K games" and avoids a full scan.
     db().query<{ n: number }>(`SELECT reltuples::bigint AS n FROM pg_class WHERE oid = '${G}'::regclass`),
+    db().query<{ n: number }>(`SELECT count(*)::int AS n FROM ${G} WHERE power_known`),
   ]);
   const m = Object.fromEntries(meta.rows.map((r) => [r.key, r.value]));
   return {
@@ -41,6 +45,7 @@ async function loadInfo(): Promise<CatalogInfo> {
     currency: (m.currency as string) ?? "USD",
     storeCounts: (m.store_counts as Record<string, number>) ?? {},
     gameCount: Math.max(0, Number(count.rows[0]?.n ?? 0)),
+    specsRead: known.rows[0]?.n ?? 0,
     loadedAt: Date.now(),
   };
 }
@@ -48,6 +53,7 @@ async function loadInfo(): Promise<CatalogInfo> {
 /** Forget cached catalogue info (after loading a catalogue in tests). */
 export function resetCatalogCache() {
   info = null;
+  countsCache.clear();
 }
 
 /** Catalogue info, refreshed at most once a minute (a crawl swaps the whole catalogue). */
@@ -79,6 +85,7 @@ export async function getMeta(): Promise<MetaResponse> {
     progress: status?.progress ?? null,
     currency: ci.currency,
     lastError: status?.state === "failed" ? status.error : null,
+    specsRead: ci.specsRead,
   };
   return { ...catalog, tags: ci.tags.map((t) => ({ tag: t.name, count: t.count })) };
 }
@@ -100,7 +107,7 @@ const bits = <T extends { key: string }>(list: readonly T[], keys: string[]) =>
 
 const yearStart = (y: number) => Math.floor(Date.UTC(y, 0, 1) / 1000);
 
-function whereClauses(q: SearchQuery, ci: CatalogInfo, p: Params, ids?: string[]): string[] {
+function whereClauses(q: SearchQuery, ci: CatalogInfo, p: Params, ids?: string[], withPower = true): string[] {
   const w: string[] = [];
   if (ids) w.push(`id = ANY(${p.add(ids)}::text[])`);
 
@@ -146,6 +153,8 @@ function whereClauses(q: SearchQuery, ci: CatalogInfo, p: Params, ids?: string[]
   const platforms = (q.platforms.includes("windows") ? 1 : 0) | (q.platforms.includes("mac") ? 2 : 0) | (q.platforms.includes("linux") ? 4 : 0);
   if (platforms) w.push(`(platforms & ${p.add(platforms)}) = ${p.add(platforms)}`);
   if (q.deck) w.push(`deck >= ${p.add(q.deck)}`);
+  const levels = POWER.filter((x) => q.power.includes(x.key)).map((x) => x.level);
+  if (withPower && levels.length) w.push(`power = ANY(${p.add(levels)}::smallint[])`);
   if (q.stores.length) w.push(`store_ids && ${p.add(q.stores)}::text[]`);
   if (q.dev.trim()) {
     w.push(`people_list @> ARRAY[${p.add(q.dev.trim().toLowerCase())}::text]`);
@@ -214,9 +223,9 @@ export async function searchGames(query: SearchQuery, pageSize = PAGE_SIZE, ids?
   const qText = query.q.trim();
   // Built twice: the count queries must get exactly the parameters they reference,
   // and the page query adds more for scoring and paging.
-  const filter = (withScore: boolean) => {
+  const filter = (withScore: boolean, withPower = true) => {
     const p = new Params();
-    const where = whereClauses(query, ci, p, ids);
+    const where = whereClauses(query, ci, p, ids, withPower);
     let score = "0";
     if (qText) {
       const text = textSearch(qText, ci, p, withScore);
@@ -229,6 +238,8 @@ export async function searchGames(query: SearchQuery, pageSize = PAGE_SIZE, ids?
   const byScore = sort === "relevance";
   const { p, score, whereSql } = filter(byScore);
   const counted = filter(false);
+  // Power levels are counted without the power filter, so each shows what picking it would give.
+  const anyPower = query.power.length ? filter(false, false) : counted;
   const order = byScore ? `${score} DESC, review_count DESC` : ORDER[sort];
 
   // Ids of the page from the narrow table first, then display data for just those.
@@ -237,7 +248,7 @@ export async function searchGames(query: SearchQuery, pageSize = PAGE_SIZE, ids?
   const pageSql = `SELECT id FROM ${G} ${whereSql} ORDER BY ${order}, id LIMIT ${limit} OFFSET ${offset}`;
   const [page, counts] = await Promise.all([
     db().query<{ id: string }>(pageSql, p.values),
-    countsFor(counted.whereSql, counted.p.values, query, ci),
+    countsFor(counted.whereSql, counted.p.values, anyPower.whereSql, anyPower.p.values, query, ci),
   ]);
   const pageIds = page.rows.map((r) => r.id);
   const results = pageIds.length
@@ -253,11 +264,12 @@ export async function searchGames(query: SearchQuery, pageSize = PAGE_SIZE, ids?
     tagFacets: counts.tagFacets,
     featureCounts: counts.featureCounts,
     languageCounts: counts.languageCounts,
+    powerCounts: counts.powerCounts,
     tookMs: Math.round(performance.now() - started),
   };
 }
 
-type Counts = Pick<SearchResponse, "total" | "tagFacets" | "featureCounts" | "languageCounts">;
+type Counts = Pick<SearchResponse, "total" | "tagFacets" | "featureCounts" | "languageCounts" | "powerCounts">;
 
 // Counts don't depend on sort or page, and broad searches (Discover shelves, plain
 // browsing) repeat a lot, so they're cached until the catalogue changes.
@@ -265,10 +277,19 @@ const countsCache = new Map<string, Promise<Counts>>();
 let countsCacheFor: string | null = null;
 const COUNTS_CACHE_SIZE = 500;
 
-function countsFor(whereSql: string, params: unknown[], query: SearchQuery, ci: CatalogInfo): Promise<Counts> {
-  if (countsCacheFor !== ci.updatedAt) {
+function countsFor(
+  whereSql: string,
+  params: unknown[],
+  anyPowerSql: string,
+  anyPowerParams: unknown[],
+  query: SearchQuery,
+  ci: CatalogInfo,
+): Promise<Counts> {
+  // Power levels also move as requirements are read, a batch every few minutes.
+  const version = `${ci.updatedAt}/${specsEpoch()}`;
+  if (countsCacheFor !== version) {
     countsCache.clear();
-    countsCacheFor = ci.updatedAt;
+    countsCacheFor = version;
   }
   const key = JSON.stringify([whereSql, params, query.audio, query.tags]);
   const hit = countsCache.get(key);
@@ -278,14 +299,21 @@ function countsFor(whereSql: string, params: unknown[], query: SearchQuery, ci: 
     countsCache.set(key, hit);
     return hit;
   }
-  const value = computeCounts(whereSql, params, query, ci);
+  const value = computeCounts(whereSql, params, anyPowerSql, anyPowerParams, query, ci);
   value.catch(() => countsCache.delete(key));
   countsCache.set(key, value);
   if (countsCache.size > COUNTS_CACHE_SIZE) countsCache.delete(countsCache.keys().next().value!);
   return value;
 }
 
-async function computeCounts(whereSql: string, params: unknown[], query: SearchQuery, ci: CatalogInfo): Promise<Counts> {
+async function computeCounts(
+  whereSql: string,
+  params: unknown[],
+  anyPowerSql: string,
+  anyPowerParams: unknown[],
+  query: SearchQuery,
+  ci: CatalogInfo,
+): Promise<Counts> {
   const langCol = query.audio ? "audio" : "langs";
   // One scan grouped by each bitmask; the per-bit counts are summed up here, which is
   // far cheaper than 60 separate FILTER aggregates in SQL.
@@ -293,10 +321,12 @@ async function computeCounts(whereSql: string, params: unknown[], query: SearchQ
                       GROUP BY GROUPING SETS ((features), (${langCol}))`;
   const facetsSql = `SELECT t AS id, count(*)::int AS n FROM ${G}, unnest(tag_ids) t ${whereSql}
                      GROUP BY t ORDER BY n DESC LIMIT ${FACET_COUNT + query.tags.length}`;
-  const [grouped, facets] = await Promise.all([
+  const [grouped, facets, power] = await Promise.all([
     db().query<{ features: number | null; lm: number | null; n: number }>(groupedSql, params),
     db().query<{ id: number; n: number }>(facetsSql, params),
+    db().query<{ power: number; n: number }>(`SELECT power, count(*)::int AS n FROM ${G} ${anyPowerSql} GROUP BY power`, anyPowerParams),
   ]);
+  const powerHits = new Map(power.rows.map((r) => [r.power, r.n]));
 
   let total = 0;
   const featureHits = new Array<number>(32).fill(0);
@@ -319,6 +349,7 @@ async function computeCounts(whereSql: string, params: unknown[], query: SearchQ
       .slice(0, FACET_COUNT),
     featureCounts: Object.fromEntries(FEATURES.map((f, b) => [f.key, featureHits[b]])),
     languageCounts: Object.fromEntries(LANGUAGES.map((l) => [l.code, langHits[l.id]])),
+    powerCounts: Object.fromEntries(POWER.map((x) => [x.key, powerHits.get(x.level) ?? 0])) as Counts["powerCounts"],
   };
 }
 
@@ -376,7 +407,8 @@ export async function getGameDetail(id: string): Promise<GameDetailResponse | nu
   const game = rowToGame(row);
   return {
     game,
-    summary: { ...summarize(game), tags: game.tags.slice(0, 8) },
+    summary: { ...summarize(game), tags: game.tags.slice(0, 8), power: row.power as PowerLevel, powerKnown: row.power_known },
+    specs: row.steam_app_id ? await getSpecs(row.steam_app_id) : null,
     features: featureKeysOf(row.features),
     languages: languagesOf(row.langs, row.audio),
   };

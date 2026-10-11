@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { GameDetailResponse, GameSummary, PricesResponse } from "../../shared/types.ts";
 import { api } from "../api.ts";
 import { FEATURE_GROUPS, FEATURES, LANGUAGE_BY_CODE, type FeatureGroup } from "../../shared/features.ts";
+import { POWER_BY_LEVEL } from "../../shared/power.ts";
+import { Meter } from "./Meter.tsx";
 import { MiniCard } from "./MiniCard.tsx";
 import { SaveButton } from "./SaveButton.tsx";
 import { DECK_LABELS, formatDate, formatPrice, reviewLabel, saleEnds, STORE_NAMES } from "../format.ts";
@@ -95,6 +97,33 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Prop
                     {p === "mac" ? "macOS" : p[0].toUpperCase() + p.slice(1)}
                   </span>
                 ))}
+            </div>
+
+            <div className={`power-panel ${summary.powerKnown ? "" : "guess"}`}>
+              <div className="power-head">
+                <Meter level={summary.power} />
+                <strong>{POWER_BY_LEVEL.get(summary.power)!.label} on hardware</strong>
+                <span>{POWER_BY_LEVEL.get(summary.power)!.hint}</span>
+              </div>
+              {detail.specs && (detail.specs.ram || detail.specs.gpuText || detail.specs.disk) && (
+                <p className="small">
+                  The store asks for at least:{" "}
+                  {[
+                    detail.specs.ram && `${detail.specs.ram} GB memory`,
+                    detail.specs.gpuText,
+                    detail.specs.disk && `${detail.specs.disk} GB disk`,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
+                </p>
+              )}
+              <p className="muted small">
+                {summary.powerKnown
+                  ? "Worked out from the store's minimum requirements."
+                  : detail.specs
+                    ? "The store's requirements don't name a graphics card, so this is an estimate from the game's tags, age and price."
+                    : "An estimate from the game's tags, age and price. The store's requirements haven't been read yet."}
+              </p>
             </div>
 
             {(game.peakPlayers || game.owners) && (

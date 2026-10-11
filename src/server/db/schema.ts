@@ -8,7 +8,7 @@ export const STAGING = "catalog_staging";
  * Bump when the catalogue tables change. The catalogue is rebuilt from scratch by
  * every crawl, so a new version just means "run the crawl after deploying".
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * Tables for one catalogue. Everything here is rebuilt by each crawl, so the whole
@@ -47,7 +47,9 @@ export async function createCatalogTables(client: pg.ClientBase, schema: string)
       best_discount_ends  bigint,
       best_store          text,
       free                boolean NOT NULL,
-      deal_score          real NOT NULL
+      deal_score          real NOT NULL,
+      power               smallint NOT NULL,         -- 1 light, 2 medium, 3 demanding
+      power_known         boolean NOT NULL           -- read from the store's requirements, not estimated
     );
 
     CREATE TABLE IF NOT EXISTS ${schema}.game_details (
@@ -113,12 +115,25 @@ export async function migrateBase(client: pg.ClientBase) {
       error       text
     );
     INSERT INTO public.crawl_status (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+    -- Minimum requirements read from Steam, one app at a time (see specs.ts). Kept
+    -- across crawls: all values are NULL for an app whose requirements say nothing.
+    CREATE TABLE IF NOT EXISTS public.specs (
+      app_id   int PRIMARY KEY,
+      ram      real,                                 -- GB
+      vram     real,                                 -- GB
+      disk     real,                                 -- GB
+      gpu      real,                                 -- card speed, GTX 1060 = 6
+      gpu_text text NOT NULL DEFAULT '',
+      level    smallint,                             -- power level these point to, if any
+      read_at  timestamptz NOT NULL DEFAULT now()
+    );
   `);
 }
 
 /**
  * `npm run migrate`: base tables plus an empty live catalogue, so the server can
- * start before the first crawl. Never touches an existing catalogue. Returns a
+ * start before the first crawl. Leaves an existing catalogue's data alone. Returns a
  * warning when the live catalogue was built by an older version.
  */
 export async function migrate(client: pg.ClientBase): Promise<string | null> {
@@ -130,6 +145,12 @@ export async function migrate(client: pg.ClientBase): Promise<string | null> {
     await client.query(`INSERT INTO ${LIVE}.meta (key, value) VALUES ('schema_version', to_jsonb($1::int))`, [SCHEMA_VERSION]);
     return null;
   }
+  // A catalogue from before power levels keeps answering (everything "light, estimated")
+  // until the crawl that follows this release rebuilds it.
+  await client.query(`
+    ALTER TABLE ${LIVE}.games ADD COLUMN IF NOT EXISTS power smallint NOT NULL DEFAULT 1;
+    ALTER TABLE ${LIVE}.games ADD COLUMN IF NOT EXISTS power_known boolean NOT NULL DEFAULT false;
+  `);
   const version = await client
     .query(`SELECT value FROM ${LIVE}.meta WHERE key = 'schema_version'`)
     .then((r) => Number(r.rows[0]?.value ?? 1))

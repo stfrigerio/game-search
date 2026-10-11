@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { BestOffer, GameSummary } from "../../shared/types.ts";
 import { HEART, Pixel } from "../pixel.tsx";
+import { PowerBadge } from "./Meter.tsx";
 import { SaveButton } from "./SaveButton.tsx";
 import { DECK_LABELS, formatCount, formatDate, formatPrice, reviewLabel, saleEnds, STORE_NAMES } from "../format.ts";
 
@@ -97,6 +98,7 @@ export function ResultCard({ game, currency, onOpen, onTag, onDev, offer }: Prop
             </span>
           ))}
           {saleEnds(game.bestDiscountEnds) && <span className="badge sale-ends">{saleEnds(game.bestDiscountEnds)}</span>}
+          <PowerBadge level={game.power} known={game.powerKnown} />
           {game.earlyAccess && <span className="badge">Early Access</span>}
           {game.deck >= 2 && <span className={`badge deck-${game.deck}`}>{DECK_LABELS[game.deck]}</span>}
           {game.platforms.linux && <span className="badge">Linux</span>}

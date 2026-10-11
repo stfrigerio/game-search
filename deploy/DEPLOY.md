@@ -7,7 +7,7 @@ What runs:
 
 | Unit | What | Memory |
 | --- | --- | --- |
-| `game-search.service` | web server, answers searches from Postgres | ~80 MB (cap 384M) |
+| `game-search.service` | web server, answers searches from Postgres; also reads system requirements from Steam in the background (one request every 1.6 s, kept in `public.specs`) | ~80 MB (cap 384M) |
 | `game-search-crawl.service` + `.timer` | nightly catalogue rebuild, ~8 min | ~330 MB peak (cap 768M) |
 | `game-search-release.path` + `.service` | after each deploy: migrate, restart, crawl if needed | — |
 

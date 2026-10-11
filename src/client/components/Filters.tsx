@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { CONTENT_FILTERS, FEATURES, LANGUAGES, type FeatureGroup, type FeatureKey } from "../../shared/features.ts";
+import { POWER } from "../../shared/power.ts";
 import { DEFAULT_QUERY, type SearchQuery, type Tristate } from "../../shared/query.ts";
 import type { SearchResponse, StoreId } from "../../shared/types.ts";
 import { formatCount, STORE_NAMES } from "../format.ts";
+import { Meter } from "./Meter.tsx";
 import { TagPicker } from "./TagPicker.tsx";
 
 interface Props {
@@ -10,6 +12,9 @@ interface Props {
   allTags: { tag: string; count: number }[];
   response: SearchResponse | null;
   currency: string;
+  /** Games whose power level was read from store requirements, out of `gameCount`. */
+  specsRead: number;
+  gameCount: number;
   onChange: (patch: Partial<SearchQuery>) => void;
 }
 
@@ -137,7 +142,7 @@ const countFeatures = (q: SearchQuery, group: FeatureGroup) =>
 const isSet = (...values: unknown[]) =>
   values.filter((v) => v !== null && v !== false && v !== "" && !(Array.isArray(v) && !v.length)).length;
 
-export function Filters({ query, allTags, response, currency, onChange }: Props) {
+export function Filters({ query, allTags, response, currency, specsRead, gameCount, onChange }: Props) {
   const toggle = <T,>(list: T[], item: T) => (list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
   const removeTag = (t: string) =>
     onChange({ tags: query.tags.filter((x) => x !== t), notTags: query.notTags.filter((x) => x !== t) });
@@ -214,6 +219,31 @@ export function Filters({ query, allTags, response, currency, onChange }: Props)
         />
         <div className="muted small">Game modes</div>
         <FeatureList group="players" query={query} counts={counts} onChange={onChange} />
+      </Section>
+
+      <Section title="Computer needed" active={query.power.length} defaultOpen>
+        <ul className="feature-list">
+          {POWER.map((p) => {
+            const on = query.power.includes(p.key);
+            return (
+              <li key={p.key}>
+                <button className={`feature power-row ${on ? "on" : ""}`} aria-pressed={on} onClick={() => onChange({ power: toggle(query.power, p.key) })}>
+                  <span className="box">{on ? "✓" : ""}</span>
+                  <span className="feature-label">
+                    <Meter level={p.level} /> {p.label}
+                    <span className="muted small power-hint">{p.hint}</span>
+                  </span>
+                  {response && <span className="muted count">{formatCount(response.powerCounts[p.key])}</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="muted small">
+          {specsRead >= gameCount * 0.9
+            ? "Worked out from each store page's minimum requirements."
+            : `Worked out from the store's minimum requirements for the ${formatCount(specsRead)} most reviewed games so far, and estimated from tags, age and price for the rest. More are read every day.`}
+        </p>
       </Section>
 
       <Section

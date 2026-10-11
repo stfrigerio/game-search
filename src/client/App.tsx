@@ -284,6 +284,8 @@ export function App() {
               allTags={meta?.tags ?? []}
               response={response}
               currency={currency}
+              specsRead={meta?.specsRead ?? 0}
+              gameCount={meta?.gameCount ?? 0}
               onChange={update}
             />
           </div>

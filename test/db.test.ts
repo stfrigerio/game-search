@@ -177,3 +177,53 @@ describe.skipIf(!url)("player modes, features, languages and content", () => {
     expect(d.game.categories).toEqual([2, 22, 28]);
   });
 });
+
+describe.skipIf(!url)("computer power", () => {
+  const year = new Date().getFullYear();
+  let light: Game;
+  let heavy: Game;
+  let read: Game;
+  const specs = { ram: 16, vram: 8, disk: 100, gpu: 11, gpuText: "RTX 3060" };
+
+  it("loads, estimating from tags, age and price", async () => {
+    const { db } = await import("../src/server/db/pool.ts");
+    await db().query("DROP TABLE IF EXISTS public.specs");
+    [light, heavy, read] = await load([
+      game("Flat Farm", { tags: ["2D", "Pixel Graphics"], year: 2016 }),
+      game("Big Open World", { tags: ["Open World", "Realistic", "3D", "Third Person"], year, price: 5999 }),
+      game("Read From Specs", { tags: ["2D", "Pixel Graphics"], year: 2016 }),
+    ]);
+    expect(await names({ power: ["low"] })).toEqual(expect.arrayContaining(["Flat Farm", "Read From Specs"]));
+    expect(await names({ power: ["high"] })).toEqual(["Big Open World"]);
+    expect((await search.getGameDetail(light.id))!.summary.powerKnown).toBe(false);
+  });
+
+  it("moves a game when its requirements are read", async () => {
+    const { saveSpecs } = await import("../src/server/specs.ts");
+    await saveSpecs(read.steamAppId!, specs);
+    search.resetCatalogCache();
+    expect((await names({ power: ["high"] })).sort()).toEqual(["Big Open World", "Read From Specs"]);
+    const detail = (await search.getGameDetail(read.id))!;
+    expect(detail.summary).toMatchObject({ power: 3, powerKnown: true });
+    expect(detail.specs).toMatchObject({ ram: 16, gpuText: "RTX 3060" });
+    expect((await search.getGameDetail(light.id))!.specs).toBeNull();
+  });
+
+  it("counts every level before the power filter is applied", async () => {
+    expect((await run({ power: ["low"] })).powerCounts).toEqual({ low: 1, mid: 0, high: 2 });
+    expect((await run({ power: ["low"] })).total).toBe(1);
+  });
+
+  it("keeps what was read across a re-crawl", async () => {
+    await load([light, heavy, read]);
+    expect((await names({ power: ["high"] })).sort()).toEqual(["Big Open World", "Read From Specs"]);
+    expect((await search.getMeta()).specsRead).toBe(1);
+  });
+
+  it("remembers an app whose requirements say nothing, without giving it a level", async () => {
+    const { saveSpecs } = await import("../src/server/specs.ts");
+    await saveSpecs(light.steamAppId!, null);
+    expect((await search.getGameDetail(light.id))!.summary).toMatchObject({ power: 1, powerKnown: false });
+  });
+});
+

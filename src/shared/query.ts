@@ -1,4 +1,5 @@
 import { CONTENT_FILTERS, FEATURE_BY_KEY, LANGUAGE_BY_CODE, type ContentKey, type FeatureKey } from "./features.ts";
+import { POWER_BY_KEY, type PowerKey } from "./power.ts";
 import type { StoreId } from "./types.ts";
 
 export const SORTS = {
@@ -43,6 +44,8 @@ export interface SearchQuery {
   /** Minimum Steam Deck compat: 2 = playable or verified, 3 = verified only. */
   deck: 0 | 2 | 3;
   stores: StoreId[];
+  /** How strong a computer the game needs; empty means any. */
+  power: PowerKey[];
   /** Player modes / features the game must have, and ones it must not. */
   features: FeatureKey[];
   notFeatures: FeatureKey[];
@@ -78,6 +81,7 @@ export const DEFAULT_QUERY: SearchQuery = {
   platforms: [],
   deck: 0,
   stores: [],
+  power: [],
   features: [],
   notFeatures: [],
   lang: null,
@@ -124,6 +128,7 @@ export function parseQuery(params: URLSearchParams): SearchQuery {
     ),
     deck: deck === 2 || deck === 3 ? deck : 0,
     stores: list(params.get("stores")).filter((s): s is StoreId => s === "steam" || s === "gog"),
+    power: list(params.get("power")).filter((p): p is PowerKey => POWER_BY_KEY.has(p)),
     features: list(params.get("features")).filter((f): f is FeatureKey => FEATURE_BY_KEY.has(f)),
     notFeatures: list(params.get("notFeatures")).filter((f): f is FeatureKey => FEATURE_BY_KEY.has(f)),
     lang: LANGUAGE_BY_CODE.has(params.get("lang") ?? "") ? params.get("lang") : null,
@@ -152,6 +157,7 @@ export function serializeQuery(query: SearchQuery): URLSearchParams {
   if (query.platforms.length) params.set("platforms", query.platforms.join(","));
   if (query.deck) params.set("deck", String(query.deck));
   if (query.stores.length) params.set("stores", query.stores.join(","));
+  if (query.power.length) params.set("power", query.power.join(","));
   if (query.features.length) params.set("features", query.features.join(","));
   if (query.notFeatures.length) params.set("notFeatures", query.notFeatures.join(","));
   if (query.lang) params.set("lang", query.lang);
