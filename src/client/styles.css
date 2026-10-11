@@ -164,9 +164,18 @@ footer p { margin: 0 0 .2rem; max-width: 80ch; }
 .hero-actions { display: flex; flex-wrap: wrap; gap: .9rem 1.1rem; }
 
 .gacha { display: flex; align-items: flex-end; justify-content: flex-end; gap: 1.6rem; }
-.gacha-machine { height: auto; width: 240px; }
+.gacha-stage { position: relative; flex: none; padding: 0 1.6rem; }
+.gacha-machine { display: block; height: auto; width: 256px; }
+.doodle { position: absolute; }
+.spark-a { top: 4%; right: 0; }
+.spark-b { top: 26%; left: .2rem; }
+.coin-a { bottom: 0; left: 0; }
+.coin-b { bottom: 0; right: .3rem; transform: translateY(-40%); }
+@keyframes twinkle { 50% { opacity: .25; } }
+.spark-a, .spark-b { animation: twinkle 1.6s steps(2) infinite; }
+.spark-b { animation-delay: .8s; }
 .gacha-bubble {
-  position: relative; flex: 0 1 17rem; min-width: 0; margin: var(--u) var(--u) 3.4rem; padding: 1rem;
+  position: relative; flex: 0 1 17rem; min-width: 0; margin: var(--u) var(--u) 4.5rem; padding: 1rem;
   background: var(--card); box-shadow: var(--frame);
   display: flex; flex-direction: column; align-items: flex-start; gap: .8rem;
 }
@@ -400,13 +409,14 @@ footer p { margin: 0 0 .2rem; max-width: 80ch; }
 
 /* ---------- Narrow screens ---------- */
 @media (max-width: 1080px) {
-  .gacha-machine { width: 144px; }
+  .gacha-machine { width: 160px; }
 }
 @media (max-width: 860px) {
   .topbar { flex-wrap: wrap; position: static; }
   .quick-filters { flex-wrap: nowrap; overflow-x: auto; margin-inline: calc(-1 * var(--gutter)); padding: 2px var(--gutter) .6rem; scrollbar-width: none; }
   .quick { white-space: nowrap; flex: none; }
   .logo span { font-size: 1.3rem; }
+  .logo svg { width: 32px; height: 32px; }
   .tabs { margin-left: auto; }
   .search-box { order: 3; flex-basis: 100%; }
   .search-box kbd { display: none; }
@@ -426,7 +436,9 @@ footer p { margin: 0 0 .2rem; max-width: 80ch; }
 @media (max-width: 520px) {
   .tabs button { padding: .5rem .45rem; font-size: 1rem; }
   .gacha { gap: .9rem; }
-  .gacha-machine { width: 112px; }
+  .gacha-machine { width: 128px; }
+  .gacha-stage { padding: 0 .9rem; }
+  .coin-b, .spark-b { display: none; }
   .results-bar { flex-direction: column; align-items: flex-start; }
   .prices td:nth-child(2):not(.num) { display: none; }
 }

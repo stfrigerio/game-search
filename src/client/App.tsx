@@ -9,7 +9,7 @@ import { GameDetail } from "./components/GameDetail.tsx";
 import { ResultCard } from "./components/ResultCard.tsx";
 import { SteamImport } from "./components/SteamImport.tsx";
 import { formatCount, STORE_NAMES } from "./format.ts";
-import { LOGO, Pixel, SLIME } from "./pixel.tsx";
+import { BUDDY, Pixel, SLIME } from "./pixel.tsx";
 import { useSavedList } from "./savedList.ts";
 
 type View = "discover" | "search" | "list";
@@ -205,7 +205,7 @@ export function App() {
             goDiscover();
           }}
         >
-          <Pixel art={LOGO} size={3} />
+          <Pixel art={BUDDY} size={3} />
           <span>game search</span>
         </a>
         <label className="search-box">
@@ -242,7 +242,7 @@ export function App() {
       {!ready && (
         <div className="layout single">
           <div className="notice">
-            <Pixel art={SLIME} size={6} className="bob" />
+            <Pixel art={SLIME} size={7} className="bob" />
             <h1>Stocking the shelves</h1>
             <p className="muted">
               The first start reads every store's catalogue, which takes a few minutes. This page fills in by itself when it is

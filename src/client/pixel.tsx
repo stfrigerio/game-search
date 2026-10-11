@@ -2,23 +2,31 @@ import type { CSSProperties } from "react";
 
 /**
  * Pixel art drawn as text: one character per square, as if coloured in on squared paper.
- * "." is empty, "K" is ink, "C" takes the text colour; the other letters are felt-tips.
+ * "." is empty, "K" is ink, "C" takes the text colour; the other letters are felt-tips,
+ * a capital for the pen and the same letter small for its shaded side.
  */
 const PENS: Record<string, string> = {
   K: "var(--ink)",
+  N: "var(--ink-soft)",
   C: "currentColor",
-  W: "#fff",
+  S: "#fff",
+  W: "#fffdf6",
+  w: "#e9dfc6",
   R: "var(--red)",
   D: "var(--red-deep)",
+  r: "#ff94a0",
   Y: "var(--yellow)",
-  O: "var(--orange)",
-  P: "var(--pink)",
-  B: "var(--sky)",
+  y: "#f2b230",
   M: "var(--mint)",
-  V: "var(--grape)",
+  m: "#43b98a",
+  B: "var(--sky)",
+  b: "#1f7fd0",
+  P: "var(--pink)",
+  p: "#f2609b",
+  V: "#9a7df0",
+  v: "#6444cf",
   G: "var(--glass)",
-  S: "var(--glass-shine)",
-  N: "var(--ink-soft)",
+  g: "#a8d3f0",
 };
 
 export interface Sprite {
@@ -73,38 +81,46 @@ export function Pixel({
   );
 }
 
-/** The mark: a magnifying glass that found something it likes. */
-export const LOGO = sprite(`
-...KKKKK....
-..KWWWWWK...
-.KWWRWRWWK..
-.KWRRRRRWK..
-.KWRRRRRWK..
-.KWWRRRWWK..
-.KWWWRWWWK..
-..KWWWWWK...
-...KKKKKKK..
-........KKK.
-.........KKK
-..........KK
+/** The mark, and the favicon (public/favicon.svg is this drawing): a capsule with a face. */
+export const BUDDY = sprite(`
+.....KKKKKK.....
+...KKYYYYYYKK...
+..KKSSYYYYYYKK..
+.KKSYYYYYYYYYKK.
+.KYSYYYYYYYYYyK.
+KYYYYYYYYYYYYyyK
+KKKKKKKKKKKKKKKK
+KWWWWWWWWWWWWwwK
+KWWKKWWWWWWKKwwK
+KWWKKWWWWWWKKwwK
+KWWWWWKWWKWWwwwK
+.KPPWWWKKWWwPPK.
+.KKWWWWWWwwwwKK.
+..KKwwwwwwwwKK..
+...KKwwwwwwKK...
+.....KKKKKK.....
 `);
 
+/** Keeps a game on your list. Takes the text colour, so it is empty until pressed. */
 export const STAR = sprite(`
-.....K.....
-....KCK....
-....KCK....
-KKKKKCKKKKK
-KCCCCCCCCCK
-.KCCCCCCCK.
-..KCCCCCK..
-..KCCKCCK..
-.KCCK.KCCK.
-.KKK...KKK.
+.....KK.....
+....KCCK....
+....KCCK....
+...KCSCCK...
+KKKKCSCCKKKK
+KCCCCCCCCCCK
+.KCCCCCCCCK.
+..KCCCCCCK..
+..KCCCCCCK..
+.KCCCKKCCCK.
+.KCCK..KCCK.
+KKKK....KKKK
 `);
 
+/** How many players liked a game. */
 export const HEART = sprite(`
 .CC.CC.
-CCCCCCC
+CSCCCCC
 CCCCCCC
 .CCCCC.
 ..CCC..
@@ -113,63 +129,89 @@ CCCCCCC
 
 /** The capsule machine on the front page. */
 export const MACHINE = sprite(`
-........KKKKKKKK........
-......KKRRRRRRRRKK......
-.....KRRRRRRRRRRRRK.....
-....KKKKKKKKKKKKKKKK....
-...KGGGGGGGGGGGGGGGGK...
-..KGGSSGGGGGGGGGGGGGGK..
-..KGSSGGGGGGGGGGGGGGGK..
-..KGSGGGKKKGGGKKKGGGGK..
-..KGSGGKYYYKGKVVVKGGGK..
-..KGGGGKYYYKGKVVVKGGGK..
-..KGGGGKWWWKGKWWWKGGGK..
-..KGGGGGKKKGGGKKKGGGGK..
-..KGGKKKGGGKKKGGGKKKGK..
-..KGKPPPKGKBBBKGKMMMKK..
-..KGKPPPKGKBBBKGKMMMKK..
-..KGKWWWKGKWWWKGKWWWKK..
-..KGGKKKGGGKKKGGGKKKGK..
-..KKKKKKKKKKKKKKKKKKKK..
-..KRRRRRRRRRRRRRRRRRRK..
-..KRRRRRRRRRRRRRRRRRRK..
-..KRRYYYYYRRRRKKKKKRRK..
-..KRRYKKKYRRRKWWWWWKRK..
-..KRRYKKKYRRRKWKKKWKRK..
-..KRRYYYYYRRRKWWWWWKRK..
-..KRRRRRRRRRRRKKKKKRRK..
-..KRRKKKKKKKKKRRRRRRRK..
-..KRRKNNNNNNNKRRRRRRRK..
-..KRRKNNNNNNNKRRRRRRRK..
-..KDDKKKKKKKKKDDDDDDDK..
-..KDDDDDDDDDDDDDDDDDDK..
-..KKKKKKKKKKKKKKKKKKKK..
-...KKKK..........KKKK...
+.............KKKKKK.............
+...........KrrRRRRRRK...........
+...........KRRRRRRDDK...........
+............KKKKKKKK............
+...........KKKGGGGKKK...........
+.........SSGGGGGGGGGGKK.........
+........SGGGGGGGGGGGGGGK........
+.......SGGGGGGKKKGGGGGGGK.......
+......SSGGGGGKMSMKGGGGGGgK......
+.....KSGGGGGKMSMMmKGGGGGGgK.....
+.....SSGGGGGKMMMMmKGGGGGGgK.....
+....KSGGGGGGKWWWWwKGGGGGGGgK....
+....KGGGGGGGGKWWwKGGGGGGGGgK....
+....KGGGGGKKKGKKKGKKKGGGGGgK....
+...KGGGGGKYSYKGGGKVSVKGGKKKgK...
+...KGGGGKYSYYyKGKVSVVvKKRSRKK...
+...KGGGGKYYYYyKGKVVVVvKRSRRDK...
+...KGGGGKWWWWwKGKWWWWwKRRRRDK...
+....KGGGGKWWwKGGGKWWwKKWWWWK....
+....KGGKKKKKKGGGGGKKKKKKWWwK....
+....KGKPSPKGGGKKKGGGKMSMKKKK....
+.....KPSPPpKGKBSBKGKMSMMmKK.....
+.....KPPPPpKKBSBBbKKMMMMmKK.....
+......KWWWwKKBBBBbKKWWWWwK......
+.......KWwKGKWWWWwKGKWWwK.......
+........KKgGGKWWwKgggKKK........
+.....KKKNNNNNNNNNNNNNNNNKKK.....
+....KDKKKKKKKKKKKKKKKKKKKKDK....
+....KDDDDDDDDDKKKKDDDDDDDDDK....
+....KRrRRRRRRRRRRRRRRRRRRDDK....
+....KRrRRRRRRRRRRRRRRRRRRDDK....
+....KRrRYYYYYyRRRRWWWwRRRDDK....
+....KRrRYYKKYyRRRWWWWwwRRDDK....
+....KRrRYYKKYyRRRKKKKKKRRDDK....
+....KRrRYYKKYyRRRKKKKKKRRDDK....
+....KRrRYYKKYyRRRWWWWwwRRDDK....
+....KRrRyyyyyyRRRRwwwwRRRDDK....
+....KRrRRRRRRRRRRRRRRRRRRDDK....
+....KRrRKKKKKKKKKRRRRRRRRDDK....
+....KRrRKNNNNNNNKRRRRRRRRDDK....
+....KRRRKNNNNNNNKRRRRRRRRDDK....
+....KDDDDDDDDDDDDDDDDDDDDDDK....
+.....KKKKKKKKKKKKKKKKKKKKKK.....
+.....KKKKKKK........KKKKKKK.....
+.....KKKKKKK........KKKKKKK.....
+......KKKKK..........KKKKK......
 `);
 
-export const CAPSULE = sprite(`
-...KKKK...
-.KKPPPPKK.
-.KPWPPPPK.
-KPWPPPPPPK
-KPPPPPPPPK
-KKKKKKKKKK
-KWWWWWWWWK
-.KWWWWWWK.
-.KKWWWWKK.
-...KKKK...
+/** A glint beside the machine. */
+export const SPARK = sprite(`
+...K...
+..KYK..
+.KKYKK.
+KYYSYYK
+.KKYKK.
+..KYK..
+...K...
+`);
+
+/** Loose change beside the machine. */
+export const COIN = sprite(`
+.KKKK.
+KYYYYK
+KYSYyK
+KYSYyK
+KYYyyK
+.KKKK.
 `);
 
 /** Keeps you company while a list is empty or the catalogue loads. */
 export const SLIME = sprite(`
-....KKKK....
-..KKMMMMKK..
-.KMMWMMMMMK.
-.KMWMMMMMMK.
-KMMMMMMMMMMK
-KMMKMMMMKMMK
-KMMKMMMMKMMK
-KMMMMKKMMMMK
-KMMMMMMMMMMK
-.KKKKKKKKKK.
+..................
+........KK........
+.....KKSMMKKK.....
+...KKMSMMMMMMKK...
+..KMMMMMMMMMMMmK..
+..KMMMMMMMMMMMMK..
+.KMMSKMMMMMMSKMmK.
+.KMMKKMMMMMMKKMmK.
+KMMMKKMMMMMMKKMmmK
+KMMMMMMKMMKMMMMmmK
+KMPPMMMMKKMMMMPPMK
+KMMMMMMMMMMMMMmmMK
+KMmmmmmmmmmmmmmmMK
+.KKKKKKKKKKKKKKKK.
 `);

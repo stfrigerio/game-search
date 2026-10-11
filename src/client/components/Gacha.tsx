@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { DEFAULT_QUERY, type SearchQuery } from "../../shared/query.ts";
 import type { GameSummary } from "../../shared/types.ts";
 import { api } from "../api.ts";
-import { MACHINE, Pixel } from "../pixel.tsx";
+import { COIN, MACHINE, Pixel, SPARK } from "../pixel.tsx";
 import { MiniCard } from "./MiniCard.tsx";
 
 /** What the machine is filled with: games most people who played them liked. */
@@ -52,7 +52,13 @@ export function Gacha({ currency, onOpen }: { currency: string; onOpen: (id: str
           {turning ? "Rattling…" : prize ? "Turn again" : "Turn the knob"}
         </button>
       </div>
-      <Pixel art={MACHINE} size={8} className="gacha-machine" />
+      <div className="gacha-stage">
+        <Pixel art={MACHINE} size={8} className="gacha-machine" />
+        <Pixel art={SPARK} size={5} className="doodle spark-a" />
+        <Pixel art={SPARK} size={3} className="doodle spark-b" />
+        <Pixel art={COIN} size={5} className="doodle coin-a" />
+        <Pixel art={COIN} size={5} className="doodle coin-b" />
+      </div>
     </div>
   );
 }
