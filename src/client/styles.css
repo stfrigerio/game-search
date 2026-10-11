@@ -398,6 +398,10 @@ button {
   color: #e6d4f5;
 }
 
+.badge.sale-ends {
+  color: var(--sale);
+}
+
 .badge.deck-3 {
   color: #59bf40;
 }
@@ -590,6 +594,14 @@ button.primary:disabled {
 
 .results-controls select {
   width: auto;
+}
+
+.tag-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
 .empty {

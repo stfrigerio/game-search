@@ -3,7 +3,7 @@ import type { GameDetailResponse, GameSummary, PricesResponse } from "../../shar
 import { api } from "../api.ts";
 import { MiniCard } from "./MiniCard.tsx";
 import { SaveButton } from "./SaveButton.tsx";
-import { DECK_LABELS, formatDate, formatPrice, reviewLabel, STORE_NAMES } from "../format.ts";
+import { DECK_LABELS, formatDate, formatPrice, reviewLabel, saleEnds, STORE_NAMES } from "../format.ts";
 
 interface Props {
   id: string;
@@ -106,6 +106,9 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen }: Props) {
                         {s.reviewCount >= 10 && <span className="muted"> ({s.reviewPct}% of {s.reviewCount.toLocaleString()})</span>}
                       </td>
                       <td className="num">
+                        {s.discountPct > 0 && saleEnds(s.discountEnds) && (
+                          <span className="muted small">{saleEnds(s.discountEnds)} </span>
+                        )}
                         {s.discountPct > 0 && <span className="discount">−{s.discountPct}%</span>}{" "}
                         {s.free ? "Free" : formatPrice(s.price, currency)}
                       </td>

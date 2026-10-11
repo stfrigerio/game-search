@@ -32,6 +32,7 @@ interface SteamItem {
     final_price_in_cents?: string;
     original_price_in_cents?: string;
     discount_pct?: number;
+    active_discounts?: { discount_end_date?: number }[];
   };
 }
 
@@ -105,6 +106,7 @@ export function steamItemToGame(item: SteamItem, tagNames: Map<number, string>):
         price,
         basePrice,
         discountPct: bpo?.discount_pct ?? 0,
+        discountEnds: bpo?.active_discounts?.[0]?.discount_end_date ?? null,
         free,
         reviewCount: reviews?.review_count ?? 0,
         reviewPct: reviews?.percent_positive ?? 0,

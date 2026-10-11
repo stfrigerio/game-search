@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_QUERY, parseQuery, serializeQuery, type SearchQuery } from "../src/shared/query.ts";
 import { bayesRating, SearchIndex } from "../src/server/search.ts";
 import type { Game } from "../src/shared/types.ts";
+import { saleEnds } from "../src/client/format.ts";
 
 let n = 0;
 function game(name: string, opts: { tags?: string[]; reviews?: [number, number]; price?: number; year?: number; dev?: string } = {}): Game {
@@ -53,6 +54,12 @@ describe("SearchIndex", () => {
 
   it("tolerates typos", () => {
     expect(search({ q: "portl knights" })).toContain("Portal Knights");
+  });
+
+  it("treats a query that is a tag name as a tag search ranked by popularity", () => {
+    const names = search({ q: "puzzle" });
+    expect(names.sort()).toEqual(["Portal", "Portal 2", "Puzzle Clone"]);
+    expect(search({ q: "puzzle" })[0]).toBe("Portal 2");
   });
 
   it("finds games by developer", () => {
@@ -125,6 +132,18 @@ describe("discovery features", () => {
   it("restricts a search to a list of ids", () => {
     const res = idx.search({ ...DEFAULT_QUERY, sort: "name" }, 30, [ids[2], ids[0], "steam:does-not-exist"]);
     expect(res.results.map((r) => r.name)).toEqual(["Deckbuilder A", "Shooter"]);
+  });
+});
+
+describe("saleEnds", () => {
+  const now = Date.UTC(2026, 9, 11, 12);
+  const at = (days: number) => Math.floor((now + days * 86_400_000) / 1000);
+  it("phrases the time left", () => {
+    expect(saleEnds(at(0.2), now)).toBe("Sale ends today");
+    expect(saleEnds(at(1.5), now)).toBe("Sale ends tomorrow");
+    expect(saleEnds(at(3.5), now)).toBe("Sale ends in 3 days");
+    expect(saleEnds(at(-1), now)).toBeNull();
+    expect(saleEnds(null, now)).toBeNull();
   });
 });
 

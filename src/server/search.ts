@@ -47,6 +47,7 @@ export function summarize(game: Game): GameSummary {
     bestPrice: best?.price ?? null,
     bestBasePrice: best?.basePrice ?? null,
     bestDiscountPct: best?.discountPct ?? 0,
+    bestDiscountEnds: best?.discountPct ? (best.discountEnds ?? null) : null,
     bestStore: best?.store ?? null,
     free: game.stores.some((s) => s.free),
     stores: game.stores.map((s) => s.store),
@@ -175,7 +176,25 @@ export class SearchIndex {
     };
     let scores = run("AND");
     if (!scores.size) scores = run("OR");
-    return [...scores].sort((a, b) => b[1] - a[1]).map(([i]) => i);
+    const ranked = [...scores].sort((a, b) => b[1] - a[1]).map(([i]) => i);
+
+
+    // A query that is exactly a tag name ("roguelike", "co-op") is really a tag search:
+    // rank every game with that tag (or the word in its title) by popularity, with a
+    // bonus for title matches and for games where the tag ranks high.
+    const tag = this.tagIds.get(lower(q.trim()));
+    if (tag === undefined) return ranked;
+    const combined = new Map<number, number>();
+    const postings = this.tagPostings[tag];
+    const ranks = this.tagPostingRanks[tag];
+    for (let k = 0; k < postings.length; k++) {
+      combined.set(postings[k], (this.summaries[postings[k]].reviewCount + 1) / (1 + ranks[k] * 0.3));
+    }
+    for (const i of ranked) {
+      const exact = this.titleKeys[i] === key;
+      combined.set(i, exact ? Infinity : ((combined.get(i) ?? this.summaries[i].reviewCount + 1)) * 3);
+    }
+    return [...combined].sort((a, b) => b[1] - a[1]).map(([i]) => i);
   }
 
   private matchesFilters(i: number, q: SearchQuery, tags: number[], notTags: number[]): boolean {

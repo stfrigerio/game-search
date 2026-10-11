@@ -89,6 +89,7 @@ export function gogProductToGame(p: GogProduct): Game | null {
         price,
         basePrice,
         discountPct,
+        discountEnds: null,
         free: price === 0,
         reviewCount: p.reviewsCount ?? 0,
         // GOG rates out of 5 stars, stored as 0-50.

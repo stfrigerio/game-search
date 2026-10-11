@@ -42,3 +42,15 @@ export function reviewLabel(pct: number, count: number): { label: string; tone: 
 export const STORE_NAMES: Record<StoreId, string> = { steam: "Steam", gog: "GOG" };
 
 export const DECK_LABELS = ["", "Unsupported on Deck", "Deck Playable", "Deck Verified"] as const;
+
+/** "Sale ends today / tomorrow / in 3 days / Oct 14". Null when unknown or already over. */
+export function saleEnds(ts: number | null | undefined, now = Date.now()): string | null {
+  if (!ts) return null;
+  const ms = ts * 1000 - now;
+  if (ms <= 0) return null;
+  const days = Math.floor(ms / 86_400_000);
+  if (days === 0) return "Sale ends today";
+  if (days === 1) return "Sale ends tomorrow";
+  if (days < 7) return `Sale ends in ${days} days`;
+  return `Sale until ${new Date(ts * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+}

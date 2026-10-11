@@ -6,19 +6,36 @@ across official stores and key resellers (G2A, Kinguin, Eneba, Instant Gaming, �
 
 ## What it does better than Steam search
 
+**Find games**
 - **Typo-tolerant search** over titles, developers and publishers ("hollow knigth", "valve").
+  Typing a tag name ("roguelike", "co-op") offers to filter by that tag instead.
 - **Include and exclude tags**, e.g. *Roguelike Deckbuilder* but not *Anime*. Tag facets
   show what's in your current results, so you can narrow down with one click (right-click
   a facet to exclude it).
 - **"Best rated" sorting that accounts for review count** ([SteamDB's formula](https://steamdb.info/blog/steamdb-rating/)),
   so a 100% game with 3 reviews doesn't beat a 97% game with 300k.
-- Filters for review score, price range, on sale, free, release years, upcoming,
+- **"Best deals" sorting**: discount weighted by quality, so 50% off a great game beats
+  90% off a bad one.
+- Filters for review score and count, price range, on sale, free, release years, upcoming,
   early access, Windows/macOS/Linux, Steam Deck compatibility and store.
+- **Similar games** on every game page, from shared *distinctive* tags (sharing
+  "Metroidvania" counts, sharing "Indie" barely does) and rating.
+- A **Discover** page with shelves: best deals right now, hidden gems (95%+ but under
+  1,000 reviews), best of the past year, great Deck games under $10, free games worth
+  playing, DRM-free GOG classics.
+
+**Pay less**
 - **One entry per game across stores**: games sold on both Steam and GOG show both
-  listings, prices and review scores. Review counts are combined.
+  listings, prices and review scores.
 - **Price comparison** on each game: live prices from official stores via
-  [CheapShark](https://www.cheapshark.com/) (Steam, GOG, Humble, Fanatical, GMG, Epic, …),
-  the historic low, and links to key resellers and price trackers.
+  [CheapShark](https://www.cheapshark.com/) (Steam, GOG, Humble, Fanatical, GMG,
+  GamesPlanet, GameBillet, …), the historic low, when the sale ends, and links to key
+  resellers (G2A, Kinguin, Eneba, Instant Gaming, …) and price trackers.
+- **My list**: star any game, or **import your Steam wishlist** (profile URL, custom URL
+  name or SteamID64; the wishlist must be public). The list shows the cheapest price
+  anywhere for each game, flags when it's cheaper outside Steam or at its historic low,
+  and supports every filter and sort ("on sale, sorted by best deal").
+  The list is stored in your browser; there are no accounts.
 - Every search is in the URL, so you can bookmark or share it.
 
 ## Running it
@@ -38,6 +55,13 @@ Production:
 
 ```sh
 npm run build && npm start   # serves the UI and API on http://localhost:3001
+```
+
+Or with Docker:
+
+```sh
+docker build -t game-search .
+docker run -p 3001:3001 -v game-search-data:/app/data game-search
 ```
 
 The server holds the whole catalogue in memory and uses about 700 MB of RAM once
@@ -70,9 +94,23 @@ src/
     search.ts      in-memory index: MiniSearch for text, then filters, sort, facets
     catalog.ts     crawl → merge → index, snapshot to disk, periodic refresh
     prices.ts      CheapShark live prices + reseller/tracker links (edit the list here)
-    index.ts       Express API: /api/meta, /api/search, /api/games/:id[/prices]
+    steam-profile.ts  Steam profile → SteamID64 → public wishlist
+    index.ts       Express API (below)
   client/          React UI (Vite)
 ```
+
+API:
+
+| Endpoint                       | What it returns                                              |
+| ------------------------------ | ------------------------------------------------------------ |
+| `GET /api/meta`                | catalogue status, store counts, all tags                     |
+| `GET /api/search?…`            | one page of results + tag facets (params as in the site URL) |
+| `POST /api/search`             | same, restricted to `{ ids }` (used for My list)              |
+| `GET /api/games/:id`           | full game record                                             |
+| `GET /api/games/:id/prices`    | live offers, historic low, reseller and tracker links        |
+| `GET /api/games/:id/similar`   | similar games                                                |
+| `POST /api/prices/best`        | cheapest offer for up to 60 `{ ids }`                         |
+| `GET /api/steam/wishlist?profile=…` | game ids on a public Steam wishlist                    |
 
 Games are matched across stores by normalised title (case, ™/®, punctuation, `&`/`and`).
 A looser match drops edition suffixes ("GOTY", "Enhanced Edition", …) and turns roman

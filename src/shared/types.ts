@@ -9,6 +9,8 @@ export interface StoreListing {
   price: number | null;
   basePrice: number | null;
   discountPct: number;
+  /** Unix seconds when the current sale ends, if the store says. */
+  discountEnds?: number | null;
   free: boolean;
   reviewCount: number;
   /** 0-100, share of positive reviews (GOG star ratings are converted). */
@@ -64,6 +66,7 @@ export interface GameSummary {
   bestPrice: number | null;
   bestBasePrice: number | null;
   bestDiscountPct: number;
+  bestDiscountEnds: number | null;
   bestStore: StoreId | null;
   free: boolean;
   stores: StoreId[];

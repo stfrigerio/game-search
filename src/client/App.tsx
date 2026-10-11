@@ -49,9 +49,11 @@ export function App() {
   const searchRef = useRef<HTMLInputElement>(null);
   const list = useSavedList();
 
-  const navigate = useCallback((next: UrlState, push = true) => {
+  const navigate = useCallback((next: UrlState, push = true, historyState: unknown = null) => {
     const url = urlFor(next);
-    if (url !== `${location.pathname}${location.search}`) history[push ? "pushState" : "replaceState"](null, "", url);
+    if (url !== `${location.pathname}${location.search}`) {
+      history[push ? "pushState" : "replaceState"](historyState, "", url);
+    }
     setState(next);
   }, []);
 
@@ -145,7 +147,12 @@ export function App() {
     };
   }, [view, response]);
 
-  const openGame = (id: string | null) => navigate({ ...state, gameId: id });
+  // Opening a game pushes a history entry so Back closes it; closing pops that entry.
+  const openGame = (id: string) => navigate({ ...state, gameId: id }, true, { modal: true });
+  const closeGame = () => {
+    if ((history.state as { modal?: boolean } | null)?.modal) history.back();
+    else navigate({ ...state, gameId: null }, false);
+  };
   const addTag = (tag: string) => {
     if (!query.tags.includes(tag)) update({ tags: [...query.tags, tag], notTags: query.notTags.filter((t) => t !== tag) });
   };
@@ -165,6 +172,20 @@ export function App() {
     setQInput(patch.q ?? "");
     navigate({ view: "search", query: { ...DEFAULT_QUERY, ...patch }, gameId: null });
     window.scrollTo({ top: 0 });
+  };
+
+  // Typing a tag name ("roguelike", "co-op") offers to filter by that tag instead.
+  const tagSuggestions = (() => {
+    const t = query.q.trim().toLowerCase();
+    if (t.length < 3 || !meta) return [];
+    return meta.tags
+      .filter((x) => x.tag.toLowerCase().includes(t) && !query.tags.includes(x.tag))
+      .sort((a, b) => Number(b.tag.toLowerCase().startsWith(t)) - Number(a.tag.toLowerCase().startsWith(t)) || b.count - a.count)
+      .slice(0, 4);
+  })();
+  const filterByTag = (tag: string) => {
+    setQInput("");
+    update({ q: "", tags: [...query.tags, tag], sort: query.sort === "relevance" ? "rating" : query.sort });
   };
 
   const currency = meta?.currency ?? "USD";
@@ -261,6 +282,16 @@ export function App() {
                 </select>
               </div>
             </div>
+            {tagSuggestions.length > 0 && (
+              <div className="tag-suggest">
+                <span className="muted small">Filter by tag instead:</span>
+                {tagSuggestions.map((t) => (
+                  <button key={t.tag} className="facet" onClick={() => filterByTag(t.tag)}>
+                    {t.tag} <span className="muted">{t.count.toLocaleString()}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {error && <p className="error">{error}</p>}
             {response && (
               <div className={`results ${loading ? "loading" : ""}`}>
@@ -332,7 +363,7 @@ export function App() {
       )}
 
       {gameId && (
-        <GameDetail id={gameId} currency={currency} onClose={() => openGame(null)} onTag={addTag} onOpen={openGame} />
+        <GameDetail id={gameId} currency={currency} onClose={closeGame} onTag={addTag} onOpen={openGame} />
       )}
     </div>
   );
