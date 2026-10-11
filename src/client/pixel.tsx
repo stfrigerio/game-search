@@ -89,24 +89,24 @@ export function Pixel({
   );
 }
 
-/** The mark, and the favicon (public/favicon.svg is this drawing): a capsule with a face. */
+/** The mark, and the favicon (public/favicon.svg is this drawing): the slime's face on a mint tile. */
 export const BUDDY = sprite(`
-.....KKKKKK.....
-...KKYYYYYYKK...
-..KKSSYYYYYYKK..
-.KKSYYYYYYYYYKK.
-.KYSYYYYYYYYYyK.
-KYYYYYYYYYYYYyyK
-KKKKKKKKKKKKKKKK
-KWWWWWWWWWWWWwwK
-KWWKKWWWWWWKKwwK
-KWWKKWWWWWWKKwwK
-KWWWWWKWWKWWwwwK
-.KPPWWWKKWWwPPK.
-.KKWWWWWWwwwwKK.
-..KKwwwwwwwwKK..
-...KKwwwwwwKK...
-.....KKKKKK.....
+..MMMMMMMMMMMM..
+.MMMMMMMMMMMMMM.
+MMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMM
+MMMMSKMMMMSKMMMM
+MMMMKKMMMMKKMMMM
+MMMMKKMMMMKKMMMM
+MMMMMMMMMMMMMMMM
+MMMMMMKMMKMMMMMM
+MMPPMMMKKMMMPPMM
+MMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMM
+mmmmmmmmmmmmmmmm
+.mmmmmmmmmmmmmm.
+..mmmmmmmmmmmm..
 `);
 
 /** Keeps a game on your list. Takes the text colour, so it is empty until pressed. */
@@ -276,22 +276,22 @@ export const MACHINE_TURN = sprite(`
 
 /** The mark with its eyes shut. */
 export const BUDDY_BLINK = sprite(`
-.....KKKKKK.....
-...KKYYYYYYKK...
-..KKSSYYYYYYKK..
-.KKSYYYYYYYYYKK.
-.KYSYYYYYYYYYyK.
-KYYYYYYYYYYYYyyK
-KKKKKKKKKKKKKKKK
-KWWWWWWWWWWWWwwK
-KWWWWWWWWWWWWwwK
-KWWKKWWWWWWKKwwK
-KWWWWWKWWKWWwwwK
-.KPPWWWKKWWwPPK.
-.KKWWWWWWwwwwKK.
-..KKwwwwwwwwKK..
-...KKwwwwwwKK...
-.....KKKKKK.....
+..MMMMMMMMMMMM..
+.MMMMMMMMMMMMMM.
+MMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMM
+MMMMKKMMMMKKMMMM
+MMMMMMMMMMMMMMMM
+MMMMMMKMMKMMMMMM
+MMPPMMMKKMMMPPMM
+MMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMM
+MMMMMMMMMMMMMMMM
+mmmmmmmmmmmmmmmm
+.mmmmmmmmmmmmmm.
+..mmmmmmmmmmmm..
 `);
 
 /** The slime with its eyes shut. */
