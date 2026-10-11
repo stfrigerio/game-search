@@ -1,0 +1,11 @@
+# The deploy key can only rsync into /srv/game-search/app, so it cannot restart anything.
+# The workflow writes the commit hash to .release as its last step; this unit sees the
+# write and starts game-search-release.service, which restarts the server.
+[Unit]
+Description=game-search - watch for a new release
+
+[Path]
+PathChanged=/srv/game-search/app/.release
+
+[Install]
+WantedBy=default.target

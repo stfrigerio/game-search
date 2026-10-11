@@ -90,6 +90,7 @@ loaded. Peaks during a re-crawl are higher.
 | Env var          | Default                | Meaning                                                   |
 | ---------------- | ---------------------- | --------------------------------------------------------- |
 | `PORT`           | `3001`                 | API/server port                                           |
+| `HOST`           | unset (all interfaces) | Interface to listen on, e.g. `127.0.0.1` behind a proxy   |
 | `STORE_COUNTRY`  | `US`                   | Region for Steam/GOG prices                               |
 | `STORE_CURRENCY` | `USD`                  | Currency for that region (GOG needs it spelled out)       |
 | `REFRESH_HOURS`  | `24`                   | Re-crawl interval                                         |

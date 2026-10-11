@@ -4,6 +4,8 @@ const env = process.env;
 
 export const config = {
   port: Number(env.PORT ?? 3001),
+  /** Interface to listen on; unset means all of them. Set 127.0.0.1 behind a reverse proxy. */
+  host: env.HOST,
   dataFile: resolve(env.DATA_FILE ?? "data/catalog.json.gz"),
   /** Region for store prices. GOG needs the matching currency spelled out. */
   country: env.STORE_COUNTRY ?? "US",

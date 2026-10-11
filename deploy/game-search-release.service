@@ -1,0 +1,7 @@
+# Started by game-search-release.path after each deploy.
+[Unit]
+Description=game-search - restart on a new release
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl --user restart game-search.service

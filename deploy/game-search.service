@@ -1,0 +1,29 @@
+# game-search on lince: the Node server behind Caddy (gamesearch.manong.app).
+# A USER unit of lince, like the other small apps there: no root, lingering keeps it up.
+# Lives in ~/.config/systemd/user/ and is driven with `systemctl --user`.
+#
+# /srv/game-search/app   the release, replaced by the Deploy workflow with rsync
+# /srv/game-search/data  the catalogue snapshot, kept across releases
+[Unit]
+Description=game-search - cross-store game search
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/game-search/app
+Environment=NODE_ENV=production
+Environment=PORT=5330
+Environment=HOST=127.0.0.1
+Environment=DATA_FILE=/srv/game-search/data/catalog.json.gz
+# The index takes ~700 MB once loaded; a re-crawl builds a second one on top.
+ExecStart=/usr/bin/node --max-old-space-size=2048 --import tsx src/server/index.ts
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+# The box is shared with production services: a runaway crawl is killed here
+# before it pushes them into swap, and it yields the CPU to them.
+MemoryMax=2560M
+Nice=5
+
+[Install]
+WantedBy=default.target

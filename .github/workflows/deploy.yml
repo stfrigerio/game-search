@@ -1,0 +1,70 @@
+# Test, build and publish the app to the lince server.
+#
+# The runner builds the front-end and rsyncs the release (dist, src, production node_modules)
+# over SSH into /srv/game-search/app. The server runs it as the systemd user unit
+# game-search.service behind Caddy; a path unit restarts it when .release changes
+# (see deploy/). Until DEPLOY_HOST is set the workflow only builds.
+#
+# Repository settings this needs (Settings → Secrets and variables → Actions):
+#   secret   DEPLOY_SSH_KEY      private key whose public half is in lince's authorized_keys,
+#                                restricted there to rrsync on /srv/game-search/app
+#   variable DEPLOY_HOST         server address
+#   variable DEPLOY_USER         SSH user
+#   variable DEPLOY_KNOWN_HOSTS  the server's host key line(s), from `ssh-keyscan <host>`
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time; a newer push replaces a build that is still waiting.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - name: Assemble the release
+        run: |
+          npm prune --omit=dev
+          mkdir release
+          cp -r dist src node_modules package.json tsconfig.json release/
+
+      - name: Deploy to lince
+        if: github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_TARGET: ${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          install -m 600 /dev/null ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          RSH="ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          # The key is locked to rrsync on the app folder, so the remote path is relative to it.
+          rsync -rtz --delete-delay --delay-updates \
+            --exclude node_modules/.bin --exclude /.release \
+            -e "$RSH" release/ "$DEPLOY_TARGET:./"
+          # Last, and written in place: this is what makes the server restart.
+          echo "$GITHUB_SHA" > .release
+          rsync -t --inplace -e "$RSH" .release "$DEPLOY_TARGET:./"

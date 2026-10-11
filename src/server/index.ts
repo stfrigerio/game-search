@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { createServer } from "node:http";
 import { resolve } from "node:path";
 import express from "express";
 import { parseQuery } from "../shared/query.ts";
@@ -109,7 +110,9 @@ if (existsSync(dist)) {
   app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(resolve(dist, "index.html")));
 }
 
-app.listen(config.port, () => console.log(`API listening on http://localhost:${config.port}`));
+createServer(app).listen({ port: config.port, host: config.host }, () =>
+  console.log(`API listening on http://${config.host ?? "localhost"}:${config.port}`),
+);
 
 const loaded = await catalog.load();
 console.log(loaded ? `Loaded ${catalog.status().gameCount} games from disk` : "No catalogue on disk yet, crawling…");
