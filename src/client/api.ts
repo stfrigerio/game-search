@@ -1,5 +1,5 @@
 import { serializeQuery, type SearchQuery } from "../shared/query.ts";
-import type { BestOffer, GameDetailResponse, GameSummary, MetaResponse, PricesResponse, SearchResponse } from "../shared/types.ts";
+import type { BestOffer, MediaResponse, GameDetailResponse, GameSummary, MetaResponse, PricesResponse, SearchResponse } from "../shared/types.ts";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -28,6 +28,7 @@ export const api = {
   game: (id: string) => request<GameDetailResponse>(`/api/games/${encodeURIComponent(id)}`),
   prices: (id: string) => request<PricesResponse>(`/api/games/${encodeURIComponent(id)}/prices`),
   similar: (id: string) => request<GameSummary[]>(`/api/games/${encodeURIComponent(id)}/similar`),
+  media: (id: string) => request<MediaResponse>(`/api/games/${encodeURIComponent(id)}/media`),
   bestOffers: (ids: string[]) =>
     request<Record<string, BestOffer | null>>("/api/prices/best", {
       method: "POST",

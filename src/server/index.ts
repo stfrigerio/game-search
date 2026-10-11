@@ -7,6 +7,7 @@ import type { BestOffer } from "../shared/types.ts";
 import { config } from "./config.ts";
 import { closeDb } from "./db/pool.ts";
 import { existingIds, getGameDetail, getGames, getMeta, PAGE_SIZE, searchGames, similarGames } from "./db/search.ts";
+import { getMedia } from "./media.ts";
 import { getPrices, getPricesBatch } from "./prices.ts";
 import { readSpecsForever } from "./specs.ts";
 import { fetchWishlist, resolveSteamId } from "./steam-profile.ts";
@@ -108,6 +109,16 @@ app.post(
         : null;
     }
     res.json(body);
+  }),
+);
+
+// Screenshot and trailer URLs; the browser loads the files from Steam's / GOG's CDN.
+app.get(
+  "/api/games/:id/media",
+  route(async (req, res) => {
+    const [game] = await getGames([String(req.params.id)]);
+    if (!game) res.status(404).json({ error: "Game not found" });
+    else res.set("Cache-Control", "public, max-age=3600").json(await getMedia(game));
   }),
 );
 

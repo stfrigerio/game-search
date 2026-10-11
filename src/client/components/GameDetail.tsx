@@ -3,6 +3,7 @@ import type { GameDetailResponse, GameSummary, PricesResponse } from "../../shar
 import { api } from "../api.ts";
 import { FEATURE_GROUPS, FEATURES, LANGUAGE_BY_CODE, type FeatureGroup } from "../../shared/features.ts";
 import { POWER_BY_LEVEL } from "../../shared/power.ts";
+import { MediaGallery } from "./MediaGallery.tsx";
 import { Meter } from "./Meter.tsx";
 import { MiniCard } from "./MiniCard.tsx";
 import { SaveButton } from "./SaveButton.tsx";
@@ -80,6 +81,7 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Prop
               )}
             </p>
             {game.description && <p className="detail-description">{game.description}</p>}
+            <MediaGallery id={game.id} storeUrl={game.stores.find((s) => s.store === "steam")?.url ?? null} />
             <div className="card-tags">
               {game.tags.map((t) => (
                 <button key={t} className="tag" onClick={() => onTag(t)}>

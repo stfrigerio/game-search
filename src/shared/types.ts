@@ -165,3 +165,24 @@ export interface GameDetailResponse {
   /** The store's minimum requirements, when we have read them. */
   specs: Specs | null;
 }
+
+/** A screenshot or trailer, loaded by the browser straight from the store's CDN. */
+export type MediaItem =
+  | { kind: "image"; thumb: string; full: string }
+  | {
+      kind: "video";
+      title: string;
+      thumb: string | null;
+      poster: string | null;
+      /** HLS playlist (Steam trailers). */
+      hls: string | null;
+      /** Short silent mp4 preview, if any. */
+      preview: string | null;
+      /** YouTube video id (GOG trailers). */
+      youtube: string | null;
+    };
+
+export interface MediaResponse {
+  items: MediaItem[];
+  error: string | null;
+}
