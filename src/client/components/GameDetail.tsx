@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { GameDetailResponse, GameSummary, PricesResponse } from "../../shared/types.ts";
 import { api } from "../api.ts";
-import { FEATURE_GROUPS, FEATURES, LANGUAGE_BY_CODE, type FeatureGroup } from "../../shared/features.ts";
+import { FEATURE_GROUPS, FEATURES, LANGUAGE_BY_CODE, playerModes, type FeatureGroup } from "../../shared/features.ts";
 import { POWER_BY_LEVEL } from "../../shared/power.ts";
 import { MediaGallery } from "./MediaGallery.tsx";
 import { Meter } from "./Meter.tsx";
@@ -138,7 +138,25 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Prop
 
             {detail.features.length > 0 && (
               <div className="detail-features">
-                {(Object.keys(FEATURE_GROUPS) as FeatureGroup[]).map((group) => {
+                {(() => {
+                  // Player modes as Steam's store page lists them, not our filter groupings.
+                  const { modes, localOnly } = playerModes(game.categories);
+                  if (!modes.length) return null;
+                  return (
+                    <div className="feature-group">
+                      <div className="muted small">{FEATURE_GROUPS.players}</div>
+                      <div className="badges">
+                        {modes.map((m) => (
+                          <span key={m} className="badge">
+                            {m}
+                          </span>
+                        ))}
+                        {localOnly && <span className="badge local-only">No online play</span>}
+                      </div>
+                    </div>
+                  );
+                })()}
+                {(Object.keys(FEATURE_GROUPS) as FeatureGroup[]).filter((g) => g !== "players").map((group) => {
                   const items = FEATURES.filter((f) => f.group === group && detail.features.includes(f.key));
                   if (!items.length) return null;
                   return (

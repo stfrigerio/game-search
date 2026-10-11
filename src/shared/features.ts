@@ -121,3 +121,45 @@ export const CONTENT_FILTERS = [
 export const PORN_TAG_RANK = 5;
 
 export type ContentKey = (typeof CONTENT_FILTERS)[number]["key"];
+
+/** Steam's player-mode categories, in the order (and with the names) the store page uses. */
+const STEAM_PLAYER_MODES: [number, string][] = [
+  [2, "Single-player"],
+  [1, "Multi-player"],
+  [20, "MMO"],
+  [49, "PvP"],
+  [36, "Online PvP"],
+  [47, "LAN PvP"],
+  [37, "Shared/Split Screen PvP"],
+  [9, "Co-op"],
+  [38, "Online Co-op"],
+  [48, "LAN Co-op"],
+  [39, "Shared/Split Screen Co-op"],
+  [24, "Shared/Split Screen"],
+  [27, "Cross-Platform Multiplayer"],
+  [44, "Remote Play Together"],
+];
+
+// Steam's data also carries generic categories ("Multi-player", "Co-op", "PvP")
+// next to the specific ones; its store page hides a generic one when a specific
+// one is there, and so do we.
+const HIDDEN_WHEN: Record<number, number[]> = {
+  1: [20, 36, 47, 37, 38, 48, 39, 24, 27],
+  9: [38, 48, 39],
+  49: [36, 47, 37],
+};
+const ONLINE = [20, 36, 38];
+const LOCAL = [39, 24, 37, 48, 47];
+
+/**
+ * Player modes for a game page, as Steam's store page lists them, plus a note when
+ * a game has multiplayer but none of it online (e.g. couch co-op only).
+ */
+export function playerModes(categories: number[]): { modes: string[]; localOnly: boolean } {
+  const has = new Set(categories);
+  const modes = STEAM_PLAYER_MODES.filter(([id]) => has.has(id) && !(HIDDEN_WHEN[id] ?? []).some((s) => has.has(s))).map(
+    ([, name]) => name,
+  );
+  const localOnly = LOCAL.some((id) => has.has(id)) && !ONLINE.some((id) => has.has(id));
+  return { modes, localOnly };
+}

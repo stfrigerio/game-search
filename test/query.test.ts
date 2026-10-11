@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { saleEnds } from "../src/client/format.ts";
+import { playerModes } from "../src/shared/features.ts";
 import { DEFAULT_QUERY, parseQuery, serializeQuery, type SearchQuery } from "../src/shared/query.ts";
 
 describe("saleEnds", () => {
@@ -40,5 +41,20 @@ describe("query params", () => {
 
   it("omits defaults so URLs stay short", () => {
     expect(serializeQuery(DEFAULT_QUERY).toString()).toBe("");
+  });
+});
+
+describe("playerModes", () => {
+  it("lists modes like Steam's store page, hiding generic ones covered by specific ones", () => {
+    // Cult of the Lamb: Steam's data has Multi-player and Co-op, its page doesn't show them.
+    expect(playerModes([2, 1, 9, 39, 24, 22, 44])).toEqual({
+      modes: ["Single-player", "Shared/Split Screen Co-op", "Shared/Split Screen", "Remote Play Together"],
+      localOnly: true,
+    });
+  });
+
+  it("keeps generic modes when nothing more specific is known, and online games aren't local-only", () => {
+    expect(playerModes([2, 1, 9])).toEqual({ modes: ["Single-player", "Multi-player", "Co-op"], localOnly: false });
+    expect(playerModes([1, 9, 38, 39]).localOnly).toBe(false);
   });
 });

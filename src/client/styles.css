@@ -408,6 +408,7 @@ footer p { margin: 0 0 .2rem; max-width: 80ch; }
 .thumb-play { position: absolute; inset: 0; display: grid; place-items: center; font: 400 1.6rem/1 var(--display); color: var(--yellow); text-shadow: 0 2px 0 var(--ink), 2px 0 0 var(--ink), 0 -2px 0 var(--ink), -2px 0 0 var(--ink); }
 .media-credit { margin: .1rem 0 0; }
 .media-fallback { display: grid; place-content: center; height: 100%; margin: 0; padding: 1rem; color: var(--card); text-align: center; }
+.badge.local-only { background: var(--yellow-soft); }
 .media-fallback a { color: var(--ink); background: var(--yellow); padding: .1rem .4rem; }
 @media (max-width: 760px) {
   .media-strip { grid-auto-columns: 96px; }
