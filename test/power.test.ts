@@ -77,8 +77,22 @@ describe("levelFromSpecs", () => {
     ];
     expect(both(...hollowKnight, { flat: true })).toBe(1);
     expect(both(...hollowKnight)).toBe(2);
-    expect(both(["4 GB RAM", "1GB dedicated VRAM or better"], null, { year: 2006 })).toBe(1);
+    expect(both(["4 GB RAM", "1GB dedicated VRAM or better"], ["8 GB RAM", "4GB dedicated VRAM"], { year: 2006 })).toBe(1);
+  });
+
+  it("reads a vague card next to a lot of memory as medium", () => {
     expect(both(["8 GB RAM", "Video card must be 1 GB or more"], null, { year: 2012 })).toBe(2);
+  });
+
+  it("never calls a recent open-world 3D game light, whatever card it claims to start on", () => {
+    const subnautica: [[string, string], [string, string]] = [["4 GB RAM", "Intel HD 4600 or equivalent"], ["8 GB RAM", "Nvidia GTX 550 Ti or equivalent, 2GB VRAM"]];
+    expect(both(...subnautica, { world3d: true, year: 2018 })).toBe(2);
+    expect(both(...subnautica, { world3d: true, year: 2009 })).toBe(1);
+  });
+
+  it("does not call a small game demanding for a cautious minimum or a round VRAM figure", () => {
+    expect(both(["8 GB RAM", "NVIDIA GForce GTX 1050"], null)).toBe(2);
+    expect(both(["8 GB RAM", "Dedicated graphics card with 4 GB of VRAM minimum"], null)).toBe(2);
   });
 
   it("calls an older real graphics card medium", () => {
@@ -86,11 +100,11 @@ describe("levelFromSpecs", () => {
     expect(both(["6 GB RAM", "AMD Radeon HD 7790 (2 GB), NVIDIA GeForce GTX 950"], ["8 GB RAM", "NVIDIA GeForce GTX 970 / AMD Radeon R9 290"])).toBe(2);
   });
 
-  it("calls demanding what needs a GTX 1060 class card to play properly", () => {
+  it("calls demanding what needs a GTX 1060 to start and something newer to play properly", () => {
     expect(both(["12 GB RAM", "GeForce GTX 1060 6GB or Radeon RX 580 8GB or Arc A380"], ["16 GB RAM", "GeForce RTX 2060 SUPER or Radeon RX 5700 XT or Arc A770"])).toBe(3);
-    // Red Dead Redemption 2: a modest minimum, a GTX 1060 recommended
-    expect(both(["8 GB RAM", "Nvidia GeForce GTX 770 2GB / AMD Radeon R9 280 3GB"], ["12 GB RAM", "Nvidia GeForce GTX 1060 6GB / AMD Radeon RX 480 4GB"])).toBe(3);
     expect(both(["8 GB RAM", "NVIDIA GTX 970 / AMD Radeon R9 390"], null)).toBe(3);
+    // Red Dead Redemption 2 recommends a GTX 1060, which is a ten-year-old card: medium.
+    expect(both(["8 GB RAM", "Nvidia GeForce GTX 770 2GB / AMD Radeon R9 280 3GB"], ["12 GB RAM", "Nvidia GeForce GTX 1060 6GB / AMD Radeon RX 480 4GB"])).toBe(2);
   });
 
   it("does not trust memory alone in the middle", () => {

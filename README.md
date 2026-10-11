@@ -176,7 +176,7 @@ Every game has a power level, shown as a three-bar meter and filterable with `po
 
 - **Light**: runs on almost anything, integrated graphics included.
 - **Medium**: wants a graphics card, an older one will do.
-- **Demanding**: wants a recent gaming PC (around a GTX 1060 or better to play properly).
+- **Demanding**: wants a recent gaming PC (a GTX 1060 to start, something newer to play properly).
 
 The level comes from the store's **minimum and recommended requirements**. The catalogue
 APIs don't carry them, so the web server reads them from Steam's `appdetails` one game at
@@ -188,10 +188,14 @@ thousands, which are the games people actually look for, take one.
 `src/server/power.ts` picks the graphics cards out of the free text, scores them on a
 scale where a GTX 1060 is 6, and takes the point halfway between the minimum and the
 recommended card as what the game really wants. The minimum alone flatters: Divinity:
-Original Sin 2 lists a GTX 550 as minimum and a GTX 770 as recommended. Under about a
-GTX 650 that is light, from about 4.5 on the scale it is demanding. Just above the light
-line a 2D or pre-2012 game still counts as light, because those routinely ask for more
-than they use. Memory only nudges; disk space is ignored.
+Original Sin 2 lists a GTX 550 as minimum and a GTX 770 as recommended. Under 1.2 on
+that scale (about a GTX 650) is light, 5 and up is demanding. Requirements are written
+by publishers and err both ways, so tags and age correct the obvious cases: a 2D or
+pre-2012 game stays light well above the line, and a recent open-world 3D game is never
+light. Memory only nudges; disk space is ignored.
+
+After changing the rule, `npm run crawl -- --relevel` works every level out again from
+what was already read, without asking Steam.
 
 Until a game has been read (and for GOG-only games) the level is an **estimate** from
 tags, age and price, drawn with a dashed edge.

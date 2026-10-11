@@ -159,7 +159,8 @@ export function parseRequirements(minimumHtml: string, recommendedHtml = ""): Sp
 }
 
 /** A card of roughly that much video memory, for requirements that name no card. */
-const cardForVram = (gb: number) => (gb <= 0.5 ? 0.3 : gb <= 1 ? 1 : gb <= 2 ? 2.5 : gb <= 3 ? 4 : gb <= 4 ? 5 : gb <= 6 ? 7 : 9);
+/** Kept modest: "4 GB of VRAM" from a small studio is a guess, not a measured need. */
+const cardForVram = (gb: number) => (gb <= 0.5 ? 0.3 : gb <= 1 ? 1 : gb <= 2 ? 2.5 : gb <= 4 ? 3.5 : gb <= 6 ? 4.5 : 6);
 const card = (gpu: number | null, vram: number | null) => gpu ?? (vram !== null ? cardForVram(vram) : null);
 
 /**
@@ -169,14 +170,14 @@ const card = (gpu: number | null, vram: number | null) => gpu ?? (vram !== null 
  * The minimum alone flatters: it is the card on which the game starts, at the lowest
  * settings. Divinity: Original Sin 2 lists a GTX 550 as minimum and a GTX 770 as
  * recommended, and nobody would call it a light game. When only one of the two is
- * given, the other is assumed to sit at the usual distance (recommended cards are
- * about twice the minimum).
+ * given it is nudged towards where the other would probably be, but only a little:
+ * a lone minimum is taken nearly at its word.
  */
 export function wantedCard(s: Specs): number | null {
   const min = card(s.gpu, s.vram);
   const rec = card(s.recGpu, s.recVram);
   if (min !== null && rec !== null) return Math.sqrt(min * Math.max(min, rec));
-  if (min !== null) return min * 1.4;
+  if (min !== null) return min * 1.15;
   if (rec !== null) return rec * 0.7;
   return null;
 }
@@ -187,16 +188,23 @@ export interface PowerHints {
   flat?: boolean;
   /** Release year. */
   year?: number | null;
+  /** A big 3D world by its tags (see isWorld3d). */
+  world3d?: boolean;
 }
 
 /**
  * The level the requirements point to, or null when they say too little.
  *
- * Under a GTX 650-ish card it is light; from about a GTX 960 with a GTX 1060
- * recommended it is demanding. Just above the light line, publishers of 2D and of old
- * games routinely ask for more than the game uses (Hollow Knight "recommends" a GTX
- * 950), so there a 2D or pre-2012 game is still light and anything else is medium.
- * Memory only nudges, and disk space says nothing about power.
+ * Under a GTX 650-ish card it is light; from about a GTX 1060 with an RTX 2060
+ * recommended it is demanding (a GTX 1060 on its own is a ten-year-old card, not a
+ * "recent gaming PC"). Requirements are written by publishers and err both ways, so
+ * what we know about the game corrects the obvious cases:
+ *  - 2D and pre-2012 games routinely ask for more than they use (Hollow Knight
+ *    "recommends" a GTX 950), so they stay light well above the usual line;
+ *  - a recent open-world 3D game is never light, whatever card it claims to start on
+ *    (Subnautica lists integrated graphics);
+ *  - "any card with 1 GB" next to 8 GB of memory is a modern game being vague.
+ * Memory otherwise only nudges, and disk space says nothing about power.
  */
 export function levelFromSpecs(s: Specs, hints: PowerHints = {}): PowerLevel | null {
   const want = wantedCard(s);
@@ -208,7 +216,12 @@ export function levelFromSpecs(s: Specs, hints: PowerHints = {}): PowerLevel | n
     return null;
   }
   const modest = hints.flat || (hints.year != null && hints.year < 2012);
-  let level: number = want < 1.2 ? 1 : want < 2.2 ? (modest ? 1 : 2) : want < 4.5 ? 2 : 3;
+  let level: number = want < (modest ? 3 : 1.2) ? 1 : want < 2.2 ? (modest ? 1 : 2) : want < 5 ? 2 : 3;
+  if (level === 1 && !modest) {
+    const noCardNamed = s.gpu === null && s.recGpu === null;
+    if (noCardNamed && s.ram !== null && s.ram >= 8) level = 2;
+    if (hints.world3d && hints.year != null && hints.year >= 2014) level = 2;
+  }
   if (s.ram !== null && s.ram >= 16 && level < 3) level++;
   return level as PowerLevel;
 }
@@ -241,6 +254,13 @@ export function isFlat(tags: string[]): boolean {
     heavy += (HEAVY_TAGS[tag.toLowerCase()] ?? 0) * weight;
   });
   return light >= 3 && light > heavy;
+}
+
+/** Whether the tags describe a big 3D world, the kind of game that is never light when recent. */
+export function isWorld3d(tags: string[]): boolean {
+  let heavy = 0;
+  tags.forEach((tag, rank) => (heavy += (HEAVY_TAGS[tag.toLowerCase()] ?? 0) * (rank < 6 ? 1 : 0.6)));
+  return heavy >= 4;
 }
 
 /**

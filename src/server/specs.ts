@@ -2,7 +2,7 @@ import type { Specs } from "../shared/power.ts";
 import { db } from "./db/pool.ts";
 import { LIVE } from "./db/schema.ts";
 import { USER_AGENT } from "./http.ts";
-import { isFlat, levelFromSpecs, parseRequirements } from "./power.ts";
+import { isFlat, isWorld3d, levelFromSpecs, parseRequirements, type PowerHints } from "./power.ts";
 
 /**
  * System requirements (minimum and recommended) read from Steam, in `public.specs`. Unlike the catalogue
@@ -40,6 +40,60 @@ export async function getSpecs(appid: number): Promise<Specs | null> {
   return { ram: r.ram, vram: r.vram, disk: r.disk, gpu: r.gpu, gpuText: r.gpu_text, recGpu: r.rec_gpu, recVram: r.rec_vram, recGpuText: r.rec_gpu_text };
 }
 
+const hintsFor = (game: { tags: string[]; release_date: number | null }): PowerHints => ({
+  flat: isFlat(game.tags),
+  world3d: isWorld3d(game.tags),
+  year: game.release_date ? new Date(game.release_date * 1000).getUTCFullYear() : null,
+});
+
+/**
+ * Work every level out again from what was read, after the rule in power.ts changes
+ * (`npm run crawl -- --relevel`). Nothing is fetched. Returns how many levels changed.
+ */
+export async function relevelSpecs(): Promise<number> {
+  let changed = 0;
+  for (let after = 0; ; ) {
+    const { rows } = await db().query<SpecRow & { app_id: number; level: number | null; tags: string[] | null; release_date: number | null }>(
+      `SELECT s.app_id, s.ram, s.vram, s.disk, s.gpu, s.gpu_text, s.rec_gpu, s.rec_vram, s.rec_gpu_text, s.level, d.tags, g.release_date
+         FROM public.specs s
+         LEFT JOIN ${LIVE}.games g ON g.steam_app_id = s.app_id
+         LEFT JOIN ${LIVE}.game_details d ON d.id = g.id
+        WHERE s.app_id > $1 ORDER BY s.app_id LIMIT 2000`,
+      [after],
+    );
+    if (!rows.length) break;
+    after = rows[rows.length - 1].app_id;
+    const ids: number[] = [];
+    const levels: (number | null)[] = [];
+    for (const r of rows) {
+      const empty = r.ram === null && r.vram === null && r.disk === null && r.gpu === null && !r.gpu_text && r.rec_gpu === null && !r.rec_gpu_text;
+      const level = empty
+        ? null
+        : levelFromSpecs(
+            { ram: r.ram, vram: r.vram, disk: r.disk, gpu: r.gpu, gpuText: r.gpu_text, recGpu: r.rec_gpu, recVram: r.rec_vram, recGpuText: r.rec_gpu_text },
+            r.tags ? hintsFor({ tags: r.tags, release_date: r.release_date }) : {},
+          );
+      if (level !== r.level) {
+        ids.push(r.app_id);
+        levels.push(level);
+      }
+    }
+    if (ids.length) {
+      await db().query(
+        "UPDATE public.specs s SET level = v.level FROM unnest($1::int[], $2::smallint[]) AS v(app_id, level) WHERE s.app_id = v.app_id",
+        [ids, levels],
+      );
+      changed += ids.length;
+    }
+  }
+  await applySpecs(LIVE);
+  // A game whose requirements no longer give a level goes back to being an estimate (its old level stays until the next crawl).
+  await db().query(
+    `UPDATE ${LIVE}.games g SET power_known = false FROM public.specs s WHERE s.app_id = g.steam_app_id AND s.level IS NULL AND g.power_known`,
+  );
+  return changed;
+}
+
 /** Remember what an app's requirements say (null = nothing usable) and move the game to that level. */
 export async function saveSpecs(appid: number, specs: Specs | null): Promise<void> {
   let level: number | null = null;
@@ -49,11 +103,7 @@ export async function saveSpecs(appid: number, specs: Specs | null): Promise<voi
       `SELECT d.tags, g.release_date FROM ${LIVE}.games g JOIN ${LIVE}.game_details d USING (id) WHERE g.steam_app_id = $1`,
       [appid],
     );
-    const game = rows[0];
-    level = levelFromSpecs(specs, {
-      flat: game ? isFlat(game.tags) : false,
-      year: game?.release_date ? new Date(game.release_date * 1000).getUTCFullYear() : null,
-    });
+    level = levelFromSpecs(specs, rows[0] ? hintsFor(rows[0]) : {});
   }
   await db().query(
     `INSERT INTO public.specs (app_id, ram, vram, disk, gpu, gpu_text, level, rec_gpu, rec_vram, rec_gpu_text)
