@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { DEFAULT_QUERY, type SearchQuery } from "../../shared/query.ts";
 import { useSavedList } from "../savedList.ts";
 import { Gacha } from "./Gacha.tsx";
@@ -63,7 +64,14 @@ export function Discover({ gameCount, currency, onOpen, onSearch, onOpenList }: 
     <div className="discover">
       <section className="hero">
         <div className="hero-copy">
-          <h1>Find a game worth your evening</h1>
+          <h1 aria-label="Find a game worth your evening">
+            {"Find a game worth your evening".split(" ").flatMap((word, i) => [
+              <span key={i} aria-hidden="true" style={{ "--i": i } as CSSProperties}>
+                {word}
+              </span>,
+              " ",
+            ])}
+          </h1>
           <p className="lede">
             {gameCount.toLocaleString()} games from Steam and GOG in one search. Filter by what you care about, then see
             which shop sells it cheapest.

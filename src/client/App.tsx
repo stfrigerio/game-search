@@ -9,7 +9,7 @@ import { GameDetail } from "./components/GameDetail.tsx";
 import { ResultCard } from "./components/ResultCard.tsx";
 import { SteamImport } from "./components/SteamImport.tsx";
 import { formatCount, STORE_NAMES } from "./format.ts";
-import { BUDDY, Pixel, SLIME } from "./pixel.tsx";
+import { BUDDY, BUDDY_BLINK, Pixel, SLIME, SLIME_BLINK } from "./pixel.tsx";
 import { useSavedList } from "./savedList.ts";
 
 type View = "discover" | "search" | "list";
@@ -42,6 +42,8 @@ export function App() {
   const [state, setState] = useState(readUrl);
   const { view, query, gameId } = state;
   const [meta, setMeta] = useState<MetaResponse | null>(null);
+  // Until the server has answered once there is nothing to say, not even "still loading".
+  const [asked, setAsked] = useState(false);
   const [response, setResponse] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,10 +90,14 @@ export function App() {
     const load = () =>
       api.meta().then(
         (m) => {
+          setAsked(true);
           setMeta(m);
           if (!m.gameCount || m.refreshing) timer = setTimeout(load, 5000);
         },
-        () => (timer = setTimeout(load, 5000)),
+        () => {
+          setAsked(true);
+          timer = setTimeout(load, 5000);
+        },
       );
     load();
     return () => clearTimeout(timer);
@@ -205,7 +211,7 @@ export function App() {
             goDiscover();
           }}
         >
-          <Pixel art={BUDDY} size={3} />
+          <Pixel art={BUDDY} alt={BUDDY_BLINK} size={3} className="blinks" />
           <span>game search</span>
         </a>
         <label className="search-box">
@@ -239,10 +245,10 @@ export function App() {
         </nav>
       </header>
 
-      {!ready && (
+      {asked && !ready && (
         <div className="layout single">
           <div className="notice">
-            <Pixel art={SLIME} size={7} className="bob" />
+            <Pixel art={SLIME} alt={SLIME_BLINK} size={7} className="blinks squish" />
             <h1>Stocking the shelves</h1>
             <p className="muted">
               The first start reads every store's catalogue, which takes a few minutes. This page fills in by itself when it is
@@ -322,7 +328,7 @@ export function App() {
                 ))}
                 {response.total === 0 && (
                   <div className="empty">
-                    <Pixel art={SLIME} size={6} />
+                    <Pixel art={SLIME} alt={SLIME_BLINK} size={6} className="blinks squish" />
                     {view === "list" && !list.ids.length ? (
                       <p>Nothing saved yet. Press the star on any game to keep it here, or import your Steam wishlist above.</p>
                     ) : (

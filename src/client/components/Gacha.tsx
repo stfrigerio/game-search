@@ -2,13 +2,13 @@ import { useRef, useState } from "react";
 import { DEFAULT_QUERY, type SearchQuery } from "../../shared/query.ts";
 import type { GameSummary } from "../../shared/types.ts";
 import { api } from "../api.ts";
-import { COIN, MACHINE, Pixel, SPARK } from "../pixel.tsx";
+import { CAPSULE, COIN, MACHINE, MACHINE_TURN, Pixel, SPARK } from "../pixel.tsx";
 import { MiniCard } from "./MiniCard.tsx";
 
 /** What the machine is filled with: games most people who played them liked. */
 const POOL: SearchQuery = { ...DEFAULT_QUERY, sort: "rating", minPct: 90, minReviews: 500 };
 /** Long enough to see the machine rattle. */
-const TURN_MS = 650;
+const TURN_MS = 900;
 
 export function Gacha({ currency, onOpen }: { currency: string; onOpen: (id: string) => void }) {
   const [prize, setPrize] = useState<GameSummary | null>(null);
@@ -53,11 +53,12 @@ export function Gacha({ currency, onOpen }: { currency: string; onOpen: (id: str
         </button>
       </div>
       <div className="gacha-stage">
-        <Pixel art={MACHINE} size={8} className="gacha-machine" />
+        <Pixel art={MACHINE} alt={MACHINE_TURN} size={8} className="gacha-machine" />
+        {prize && !turning && <Pixel key={prize.id} art={CAPSULE} size={5} className="doodle dropped" />}
         <Pixel art={SPARK} size={5} className="doodle spark-a" />
         <Pixel art={SPARK} size={3} className="doodle spark-b" />
-        <Pixel art={COIN} size={5} className="doodle coin-a" />
-        <Pixel art={COIN} size={5} className="doodle coin-b" />
+        <Pixel art={COIN} size={5} className="doodle coin coin-a" />
+        <Pixel art={COIN} size={5} className="doodle coin coin-b" />
       </div>
     </div>
   );

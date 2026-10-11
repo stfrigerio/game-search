@@ -434,7 +434,10 @@ footer p { margin: 0 0 .2rem; max-width: 80ch; }
   .modal .hero { float: none; width: 100%; margin-right: 0; }
 }
 @media (max-width: 520px) {
-  .tabs button { padding: .5rem .45rem; font-size: 1rem; }
+  .topbar { gap: .6rem .5rem; }
+  .logo span { display: none; }
+  .tabs { gap: 0; }
+  .tabs button { padding: .5rem .35rem; font-size: 1.2rem; gap: .25rem; }
   .gacha { gap: .9rem; }
   .gacha-machine { width: 128px; }
   .gacha-stage { padding: 0 .9rem; }
@@ -446,3 +449,87 @@ footer p { margin: 0 0 .2rem; max-width: 80ch; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- Movement ----------
+   Everything moves in steps, like a flip-book: no easing, a few frames each. Idle motion
+   is small and slow (a blink, a twinkle, a coin turning); the bigger moves answer
+   something you did. All of it is switched off for people who ask for less motion. */
+svg .alt { visibility: hidden; }
+@keyframes blink { 0%, 93% { visibility: hidden; } 94%, 100% { visibility: visible; } }
+.blinks .alt { animation: blink 4.2s steps(1) infinite; }
+@keyframes squish { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.06, .92); } }
+.squish { transform-origin: 50% 100%; animation: squish 1.2s steps(3) infinite; }
+@keyframes hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-6px); } 70% { transform: translateY(-2px); } }
+.logo:hover svg { animation: hop .4s steps(4); }
+
+/* The front page arrives once: the title is stamped down a word at a time, then the rest. */
+@keyframes stamp { 0% { opacity: 0; transform: translateY(-.25em) scale(1.12); } 60% { opacity: 1; transform: translateY(.04em) scale(.98); } 100% { opacity: 1; transform: none; } }
+.hero h1 span { display: inline-block; animation: stamp .24s steps(4) backwards; animation-delay: calc(var(--i) * 90ms + 80ms); }
+@keyframes rise { 0% { opacity: 0; transform: translateY(12px); } 100% { opacity: 1; transform: none; } }
+.hero .lede, .hero-actions, .gacha { animation: rise .3s steps(4) backwards; animation-delay: .65s; }
+.hero-actions { animation-delay: .75s; }
+.gacha { animation-delay: .85s; }
+
+/* Covers are dealt onto a shelf one after another. */
+.shelf-row > .mini-card:not(.skeleton), .results > .card, .similar-grid > .mini-card { animation: rise .22s steps(3) backwards; }
+.shelf-row > :nth-child(2), .results > :nth-child(2), .similar-grid > :nth-child(2) { animation-delay: 50ms; }
+.shelf-row > :nth-child(3), .results > :nth-child(3), .similar-grid > :nth-child(3) { animation-delay: 100ms; }
+.shelf-row > :nth-child(4), .results > :nth-child(4), .similar-grid > :nth-child(4) { animation-delay: 150ms; }
+.shelf-row > :nth-child(5), .results > :nth-child(5), .similar-grid > :nth-child(5) { animation-delay: 200ms; }
+.shelf-row > :nth-child(6), .results > :nth-child(6), .similar-grid > :nth-child(6) { animation-delay: 250ms; }
+.shelf-row > :nth-child(n + 7) { animation-delay: 300ms; }
+@keyframes pulse { 50% { opacity: .3; } }
+.mini-card.skeleton { animation: pulse 1s steps(2) infinite; }
+
+/* Stickers flap when you point at their card. */
+@keyframes flap { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(4deg) scale(1.08); } }
+.mini-card:hover .mini-thumb .price { animation: flap .4s steps(2) infinite; }
+@keyframes shake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-6deg); } 75% { transform: rotate(6deg); } }
+.card:hover .discount { animation: shake .3s steps(2) infinite; display: inline-flex; }
+
+/* Keeping a game: the star jumps and throws four sparks. */
+@keyframes star-pop { 0% { transform: scale(.4) rotate(-20deg); } 50% { transform: scale(1.6) rotate(10deg); } 100% { transform: none; } }
+.save.just-saved svg { animation: star-pop .32s steps(4); }
+.save { position: relative; }
+@keyframes sparks { 0% { opacity: 1; box-shadow: 0 -6px 0 var(--red), 6px 0 0 var(--ink), 0 6px 0 var(--red), -6px 0 0 var(--ink); } 100% { opacity: 0; box-shadow: 0 -26px 0 var(--red), 26px 0 0 var(--ink), 0 26px 0 var(--red), -26px 0 0 var(--ink); } }
+.save.just-saved::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; opacity: 0; pointer-events: none; animation: sparks .4s steps(4); }
+
+/* The highlighter is drawn across the page you move to. */
+@keyframes swipe { 0% { background-size: 0 100%; } 100% { background-size: 100% 100%; } }
+.tabs button.active { background-repeat: no-repeat; animation: swipe .2s steps(5); }
+@keyframes pop-in { 0% { transform: scale(.7); } 70% { transform: scale(1.08); } 100% { transform: none; } }
+.chip, .tab-count, .active-count { animation: pop-in .18s steps(3); }
+
+/* A game opens like a card flipped onto the table. */
+@keyframes backdrop { 0% { opacity: 0; } }
+.modal-backdrop { animation: backdrop .15s steps(3); }
+@keyframes deal { 0% { opacity: 0; transform: translateY(28px) rotate(-1.5deg); } 70% { opacity: 1; transform: translateY(-4px) rotate(.4deg); } 100% { transform: none; } }
+.modal { animation: deal .26s steps(5); }
+.modal .close:hover { animation: shake .3s steps(2) infinite; }
+/* The till prints the receipt. */
+@keyframes print { 0% { clip-path: inset(0 -6px 100% -6px); } 100% { clip-path: inset(0 -6px -14px -6px); } }
+.receipt { animation: print .5s steps(10); }
+
+/* The machine. Idle: coins turn, glints twinkle. Turning: the knob flips upright and back,
+   the capsules get knocked about, the whole thing rattles. Then one capsule drops out,
+   bounces, and the prize card pops up. */
+@keyframes coin-spin { 0%, 100% { transform: scaleX(1); } 25% { transform: scaleX(.5); } 50% { transform: scaleX(.12); } 75% { transform: scaleX(.5); } }
+.coin { animation: coin-spin 1.4s steps(1) infinite; }
+.coin-b { animation-name: coin-spin-b; animation-delay: .5s; }
+@keyframes coin-spin-b { 0%, 100% { transform: translateY(-40%) scaleX(1); } 25% { transform: translateY(-40%) scaleX(.5); } 50% { transform: translateY(-40%) scaleX(.12); } 75% { transform: translateY(-40%) scaleX(.5); } }
+@keyframes flick { 0%, 49% { visibility: visible; } 50%, 100% { visibility: hidden; } }
+.gacha.turning .gacha-machine .alt { animation: flick .3s steps(1) infinite; }
+.gacha.turning .spark-a, .gacha.turning .spark-b { animation-duration: .3s; }
+.gacha.turning .coin { animation-duration: .4s; }
+@keyframes drop {
+  0% { transform: translate(0, -70px) scale(.6); opacity: 0; }
+  15% { transform: translate(0, -40px) scale(1); opacity: 1; }
+  40% { transform: translate(-14px, 0) rotate(-40deg); }
+  55% { transform: translate(-30px, -22px) rotate(-120deg); }
+  72% { transform: translate(-46px, 0) rotate(-200deg); }
+  84% { transform: translate(-54px, -8px) rotate(-250deg); }
+  100% { transform: translate(-62px, 0) rotate(-290deg); }
+}
+.dropped { left: 34%; bottom: 0; transform: translate(-62px, 0) rotate(-290deg); animation: drop .7s steps(14); }
+.gacha-bubble .mini-card { animation: pop .3s steps(4) .45s backwards; }
+.gacha.turning .gacha-bubble .primary { animation: shake .3s steps(2) infinite; }
