@@ -135,7 +135,8 @@ app.get(
 const dist = resolve("dist");
 if (existsSync(dist)) {
   app.use(express.static(dist));
-  app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(resolve(dist, "index.html")));
+  // The app lives at "/" alone (its state is in the query string), so any other path is not a page.
+  app.use((_req, res) => void res.status(404).type("text/plain").send("Not found"));
 }
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
