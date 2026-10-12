@@ -1,10 +1,12 @@
 import type pg from "pg";
 import type { Game } from "../shared/types.ts";
 import { db } from "./db/pool.ts";
+import { mapLimit } from "./http.ts";
 import { deleteGames, fullGame, insertGames, rowToGame, type GameRow } from "./db/rows.ts";
 import { createCatalogIndexes, createCatalogTables, LIVE, migrateBase, SCHEMA_VERSION, STAGING } from "./db/schema.ts";
 import { absorb, TitleMatcher } from "./merge.ts";
 import { crawlSteam, OTHER_SOURCES, type CrawlOptions } from "./sources/index.ts";
+import { currentPlayers, topPeaks } from "./sources/steam-players.ts";
 import { crawlSteamSpy } from "./sources/steamspy.ts";
 import { applySpecs } from "./specs.ts";
 
@@ -249,6 +251,61 @@ async function addPlayerCounts(
       report(`Couldn't carry over player counts: ${String(copyErr)}`, true);
     }
   }
+  try {
+    await fillPlayerGaps(client, schema, report, config.limit ? 50 : undefined);
+  } catch (err) {
+    report(`Steam player counts unavailable: ${String(err)}`, true);
+  }
+}
+
+// Games with fewer reviews than this and no SteamSpy number are left without one.
+const GAP_MIN_REVIEWS = 100;
+
+/**
+ * Ask Steam itself about games SteamSpy has no players for, most reviewed first. Steam
+ * only tells the count right now, which runs below the day's peak; the 100 most played
+ * games get their real peak from Steam's chart.
+ */
+async function fillPlayerGaps(client: pg.ClientBase, schema: string, report: (msg: string, force?: boolean) => void, limit?: number) {
+  const save = (apps: number[], players: number[]) =>
+    client.query(
+      `UPDATE ${schema}.games g SET peak_players = v.players
+         FROM unnest($1::int[], $2::int[]) AS v(appid, players) WHERE g.steam_app_id = v.appid`,
+      [apps, players],
+    );
+  const peaks = await topPeaks();
+  await save([...peaks.keys()], [...peaks.values()]);
+
+  const { rows } = await client.query<{ appid: number }>(
+    `SELECT steam_app_id AS appid FROM ${schema}.games
+      WHERE steam_app_id IS NOT NULL AND coalesce(peak_players, 0) = 0 AND review_count >= $1 AND NOT coming_soon
+      ORDER BY review_count DESC LIMIT $2`,
+    [GAP_MIN_REVIEWS, limit ?? null],
+  );
+  let done = 0;
+  let found = 0;
+  let failed = 0;
+  const BATCH = 400;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const batch = rows.slice(i, i + BATCH);
+    const counts = await mapLimit(batch, 4, async ({ appid }) => {
+      // A few lost answers don't matter; Steam turning us away does.
+      if (failed > 50) return null;
+      try {
+        return await currentPlayers(appid);
+      } catch {
+        failed++;
+        return null;
+      }
+    });
+    const known = batch.flatMap((r, j) => (counts[j] === null ? [] : [{ appid: r.appid, players: counts[j]! }]));
+    if (known.length) await save(known.map((k) => k.appid), known.map((k) => k.players));
+    found += known.length;
+    done += batch.length;
+    report(`Steam players: ${done}/${rows.length}`);
+    if (failed > 50) throw new Error(`Steam stopped answering after ${done} games`);
+  }
+  report(`Steam players: ${found} of ${rows.length} games SteamSpy had nothing for`, true);
 }
 
 /** Refresh only player counts, directly on the live catalogue. */

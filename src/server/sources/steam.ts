@@ -98,7 +98,8 @@ export function steamItemToGame(item: SteamItem, tagNames: Map<number, string>):
     description: item.basic_info?.short_description ?? "",
     image: steamImage(appid, item.assets?.header),
     releaseDate,
-    comingSoon: !!(item.is_coming_soon || release?.is_coming_soon),
+    // Some unreleased games aren't flagged; a release date still ahead says the same.
+    comingSoon: !!(item.is_coming_soon || release?.is_coming_soon) || (releaseDate ?? 0) > Date.now() / 1000,
     earlyAccess: !!item.is_early_access,
     platforms: {
       windows: !!item.platforms?.windows,

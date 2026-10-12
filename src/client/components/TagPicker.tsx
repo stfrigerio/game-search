@@ -10,20 +10,22 @@ interface Props {
 }
 
 const MAX_SUGGESTIONS = 12;
+/** "coop" finds "Co-op", "scifi" finds "Sci-fi". */
+const plain = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 
 export function TagPicker({ allTags, included, excluded, onInclude, onExclude, onRemove }: Props) {
   const [text, setText] = useState("");
   const [active, setActive] = useState(0);
 
   const suggestions = useMemo(() => {
-    const t = text.trim().toLowerCase();
+    const t = plain(text);
     if (!t) return [];
     const chosen = new Set([...included, ...excluded].map((x) => x.toLowerCase()));
     const starts = [];
     const contains = [];
     for (const tag of allTags) {
-      const name = tag.tag.toLowerCase();
-      if (chosen.has(name)) continue;
+      if (chosen.has(tag.tag.toLowerCase())) continue;
+      const name = plain(tag.tag);
       if (name.startsWith(t)) starts.push(tag);
       else if (name.includes(t)) contains.push(tag);
       if (starts.length >= MAX_SUGGESTIONS) break;

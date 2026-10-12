@@ -20,7 +20,7 @@ across official stores and key resellers (G2A, Kinguin, Eneba, Instant Gaming, �
   - **Reviews**: % positive and number of reviews (min and max, for hidden gems)
   - **Computer needed**: light, medium or demanding, from each game's minimum system
     requirements (see [below](#computer-needed-light--medium--demanding))
-  - **Players**: how many are playing now (Steam peak yesterday, via SteamSpy) and game
+  - **Players**: how many are playing (yesterday's peak from SteamSpy; Steam's own count for the games SteamSpy misses) and game
     modes: single-player, multiplayer, co-op, online / local split-screen / LAN co-op,
     PvP, MMO, cross-platform, Remote Play Together
   - **Price**: range, on sale, minimum discount, free / not free
@@ -88,7 +88,7 @@ npm start         # serves the UI and API on http://localhost:3001
 The web server keeps nothing in memory but a small cache (~100 MB RSS). The catalogue
 is rebuilt by a separate nightly job, `node dist-server/crawl-cli.js`; see
 [deploy/DEPLOY.md](deploy/DEPLOY.md) for the systemd service and timer.
-`npm run crawl -- --players` refreshes only the SteamSpy player counts.
+`npm run crawl -- --players` refreshes only the player counts.
 
 ### Configuration
 
@@ -117,6 +117,7 @@ src/
       steam.ts       Steam's store query API (no API key), streamed page by page
       gog.ts         GOG's catalogue API (no API key)
       steamspy.ts    player counts and owner estimates (slow, polite crawl)
+      steam-players.ts  Steam's own player counts, for games SteamSpy has nothing for
     crawler.ts       crawl → staging schema → atomic swap (crawl-cli.ts runs it)
     merge.ts         matches the same game across stores by title
     derive.ts        per-game summary values: rating, best price, feature bitmasks

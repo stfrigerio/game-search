@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CONTENT_FILTERS, FEATURES, LANGUAGES, type FeatureGroup, type FeatureKey } from "../../shared/features.ts";
 import { POWER } from "../../shared/power.ts";
 import { DEFAULT_QUERY, type SearchQuery, type Tristate } from "../../shared/query.ts";
@@ -18,10 +18,18 @@ interface Props {
   onChange: (patch: Partial<SearchQuery>) => void;
 }
 
-/** A collapsible filter section; opens by default when it has an active filter. */
+/**
+ * A collapsible filter section. It opens by itself when a filter in it becomes active,
+ * and otherwise stays the way the user left it: clearing its last filter doesn't close it.
+ */
 function Section({ title, active, defaultOpen, children }: { title: string; active: number; defaultOpen?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen || active > 0);
+  const hasActive = active > 0;
+  useEffect(() => {
+    if (hasActive) setOpen(true);
+  }, [hasActive]);
   return (
-    <details className="filter-section" open={defaultOpen || active > 0}>
+    <details className="filter-section" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>
         {title}
         {active > 0 && <span className="active-count">{active}</span>}
@@ -211,7 +219,7 @@ export function Filters({ query, allTags, response, currency, specsRead, gameCou
       </Section>
 
       <Section title="Players" active={countFeatures(query, "players") + isSet(query.minPlayers)} defaultOpen>
-        <div className="muted small">Playing right now (Steam peak yesterday)</div>
+        <div className="muted small">Playing on Steam (about a day old)</div>
         <Presets
           options={[10, 100, 1000, 10000, 100000].map((v) => ({ label: `${formatCount(v)}+`, value: v }))}
           isActive={(v) => query.minPlayers === v}

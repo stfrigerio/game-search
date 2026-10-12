@@ -71,7 +71,7 @@ export function ResultCard({ game, currency, onOpen, onTag, onDev, offer }: Prop
             </button>
           )}
           {game.peakPlayers ? (
-            <span className="muted" title="Peak concurrent players on Steam yesterday (SteamSpy)">
+            <span className="muted" title="Players on Steam: yesterday's peak, or the count at last night's update">
               {formatCount(game.peakPlayers)} playing
             </span>
           ) : null}
