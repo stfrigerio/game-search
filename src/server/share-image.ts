@@ -106,8 +106,15 @@ async function render(node: Node, format: Format): Promise<Buffer> {
 
 // ---- shared pieces ----
 
-function page(format: Format, site: string, footer: string, ...children: Child[]): Node {
+/** The closing line: a call to action and where to go. */
+interface Footer {
+  cta: string;
+  url: string;
+}
+
+function page(format: Format, site: string, footer: Footer, ...children: Child[]): Node {
   const story = format === "story";
+  const domain = site.replace(/^https?:\/\//, "");
   return box(
     {
       width: "100%",
@@ -126,7 +133,14 @@ function page(format: Format, site: string, footer: string, ...children: Child[]
       text({ fontSize: story ? 30 : 22, fontWeight: 700, color: C.inkSoft }, site.replace(/^https?:\/\//, "")),
     ),
     ...children,
-    text({ marginTop: "auto", fontSize: story ? 36 : 26, fontWeight: 700, color: C.ink }, footer),
+    story
+      ? // A story ends on a band across the bottom, so it reads as finished and says where to go.
+        box(
+          { marginTop: "auto", flexDirection: "column", gap: 10, backgroundColor: C.ink, padding: "34px 44px", boxShadow: `10px 10px 0 ${C.grape}` },
+          text({ fontFamily: "Jersey", fontSize: 72, lineHeight: 1, color: C.yellow }, footer.cta),
+          text({ fontSize: 34, fontWeight: 700, color: C.card }, `${domain}${footer.url}`),
+        )
+      : text({ marginTop: "auto", fontSize: 26, fontWeight: 700, color: C.ink }, `${footer.cta} ${domain}${footer.url}`),
   );
 }
 
@@ -157,6 +171,9 @@ export async function profileImage(lib: LibraryResponse, format: Format, site: s
   const avatar = await picture(bigAvatar(lib.profile.avatar));
   const top = lib.insights.topGames[0];
   const header = top ? await picture(steamHeader(top.appId)) : null;
+  const topThree = story
+    ? await Promise.all(lib.insights.topGames.slice(0, 3).map(async (game) => ({ game, image: await picture(steamHeader(game.appId)) })))
+    : [];
   const p = persona(lib);
   const t = lib.totals;
   const stats: [string, string][] = [
@@ -189,15 +206,24 @@ export async function profileImage(lib: LibraryResponse, format: Format, site: s
   const handle = profileHandle(lib);
   const body = story
     ? box(
-        { flexDirection: "column", gap: 56, marginTop: 90 },
+        { flexDirection: "column", gap: 46, marginTop: 64, marginBottom: 50 },
         who,
         statGrid,
-        top && header
+        topThree.length
           ? box(
-              { flexDirection: "column", gap: 16 },
-              text({ fontSize: 32, fontWeight: 700, color: C.inkSoft }, "Most played"),
-              panel({ flexDirection: "column", alignSelf: "flex-start" }, img(header, 700, 327)),
-              text({ fontSize: 38, fontWeight: 800 }, `${top.name}, ${hours(top.minutes)}`),
+              { flexDirection: "column", gap: 18 },
+              text({ fontSize: 32, fontWeight: 800, color: C.inkSoft, textTransform: "uppercase", letterSpacing: 2 }, "Most played"),
+              ...topThree.map(({ game, image }, i) =>
+                box(
+                  { alignItems: "center", gap: 26 },
+                  image ? img(image, 214, 100, { border: `4px solid ${C.ink}` }) : box({ width: 214, height: 100, backgroundColor: C.accents[i + 1], border: `4px solid ${C.ink}` }),
+                  box(
+                    { flexDirection: "column", flex: 1 },
+                    text({ fontSize: game.name.length > 28 ? 32 : 38, fontWeight: 800, lineHeight: 1.15 }, `${i + 1}. ${game.name}`),
+                    text({ fontSize: 30, fontWeight: 500, color: C.inkSoft }, hours(game.minutes)),
+                  ),
+                ),
+              ),
             )
           : null,
       )
@@ -212,7 +238,7 @@ export async function profileImage(lib: LibraryResponse, format: Format, site: s
             )
           : null,
       );
-  return render(page(format, site, `What's yours worth? ${story ? "" : `${site.replace(/^https?:\/\//, "")}/u/${handle}`}`, body), format);
+  return render(page(format, site, { cta: "What's yours worth?", url: `/u/${handle}` }, body), format);
 }
 
 export async function slideImage(lib: LibraryResponse, slide: Slide, index: number, site: string): Promise<Buffer> {
@@ -220,18 +246,18 @@ export async function slideImage(lib: LibraryResponse, slide: Slide, index: numb
   const avatar = slide.key === "intro" ? await picture(bigAvatar(lib.profile.avatar)) : null;
   const accent = C.accents[index % C.accents.length];
   const body = box(
-    { flexDirection: "column", gap: 44, flex: 1, justifyContent: "center", paddingBottom: 60 },
+    { flexDirection: "column", gap: 34, flex: 1, justifyContent: "center", padding: "40px 0 50px" },
     avatar ? img(avatar, 200, 200, { border: `5px solid ${C.ink}` }) : null,
     text({ fontSize: 44, fontWeight: 800, color: C.inkSoft, textTransform: "uppercase", letterSpacing: 2 }, slide.eyebrow),
     panel(
       { flexDirection: "column", padding: "36px 44px", backgroundColor: accent, alignSelf: "flex-start", maxWidth: 920 },
-      text({ fontFamily: "Jersey", fontSize: fit(slide.big, 830, 230, 3), lineHeight: 1 }, slide.big),
+      text({ fontFamily: "Jersey", fontSize: fit(slide.big, 830, 210, 2), lineHeight: 1 }, slide.big),
     ),
-    text({ fontSize: 56, fontWeight: 800, lineHeight: 1.2 }, slide.title),
-    header ? panel({ alignSelf: "flex-start" }, img(header, 910, 425)) : null,
-    ...slide.lines.map((l) => text({ fontSize: 42, fontWeight: 500, lineHeight: 1.3 }, l)),
+    text({ fontSize: 50, fontWeight: 800, lineHeight: 1.2 }, slide.title),
+    header ? panel({ alignSelf: "flex-start" }, img(header, 760, 355)) : null,
+    ...slide.lines.map((l) => text({ fontSize: 38, fontWeight: 500, lineHeight: 1.25 }, l)),
   );
-  return render(page("story", site, `${site.replace(/^https?:\/\//, "")}/u/${profileHandle(lib)}/wrapped`, body), "story");
+  return render(page("story", site, { cta: "See the whole story", url: `/u/${profileHandle(lib)}/wrapped` }, body), "story");
 }
 
 export async function compareImage(cmp: CompareResponse, site: string): Promise<Buffer> {
@@ -265,7 +291,7 @@ export async function compareImage(cmp: CompareResponse, site: string): Promise<
       stat(formatNumber(coop), "co-op games both own", 2),
     ),
   );
-  return render(page("card", site, `Compare with your friends at ${site.replace(/^https?:\/\//, "")}`, body), "card");
+  return render(page("card", site, { cta: "Compare with your friends at", url: "" }, body), "card");
 }
 
 export { wrappedSlides };
