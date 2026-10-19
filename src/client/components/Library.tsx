@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import type { LibraryGame, LibraryResponse } from "../../shared/types.ts";
 import { api } from "../api.ts";
 import { formatCount, formatPrice } from "../format.ts";
+import { profileBlurb, profileHandle } from "../../shared/wrapped.ts";
 import { ChartCard, Columns, HBars, TierBar } from "./Charts.tsx";
+import { Compare } from "./Compare.tsx";
+import { ShareButton } from "./ShareButton.tsx";
+import { Wrapped } from "./Wrapped.tsx";
 import { signInFailed, SteamSignIn } from "./SteamSignIn.tsx";
 
 const PROFILE_KEY = "game-search:steam-profile";
@@ -78,9 +82,37 @@ function Row({ g, currency, onOpen }: { g: LibraryGame; currency: string; onOpen
  * Steam's playtime, and the cost per hour played. Steam doesn't reveal what anyone
  * paid, so "value" is always at today's prices.
  */
-export function Library({ initialProfile, onProfile, onOpen }: { initialProfile: string; onProfile: (p: string) => void; onOpen: (id: string) => void }) {
+/** Remember a profile as "mine" only when it was entered here or signed in, not when following someone's link. */
+function rememberMine(profile: string) {
+  try {
+    localStorage.setItem(PROFILE_KEY, profile);
+  } catch {
+    // not remembered; fine
+  }
+}
+
+export type LibrarySub = { wrapped?: boolean; vs?: string };
+
+export function Library({
+  initialProfile,
+  wrapped,
+  vs,
+  onProfile,
+  onCanonical,
+  onSub,
+  onOpen,
+}: {
+  initialProfile: string;
+  wrapped: boolean;
+  vs: string | undefined;
+  onProfile: (p: string) => void;
+  /** The short link for the loaded profile, to replace whatever was typed in the URL. */
+  onCanonical: (handle: string) => void;
+  onSub: (sub: LibrarySub) => void;
+  onOpen: (id: string) => void;
+}) {
+  // Prefilled with the visitor's own profile, not one they followed a link to.
   const [input, setInput] = useState(() => {
-    if (initialProfile) return initialProfile;
     try {
       return localStorage.getItem(PROFILE_KEY) ?? "";
     } catch {
@@ -106,11 +138,14 @@ export function Library({ initialProfile, onProfile, onOpen }: { initialProfile:
         setData(d);
         setLoading(false);
         setShown(PAGE);
-        try {
-          localStorage.setItem(PROFILE_KEY, profile.trim());
-        } catch {
-          // not remembered; fine
+        // Back from "Sign in with Steam": this one is the visitor's own.
+        const params = new URLSearchParams(location.search);
+        if (params.has("me")) {
+          rememberMine(profileHandle(d));
+          params.delete("me");
+          history.replaceState(history.state, "", `${location.pathname}${params.size ? `?${params}` : ""}`);
         }
+        if (profileHandle(d) !== profile.trim()) onCanonical(profileHandle(d));
       },
       (e) => {
         setError(String(e.message ?? e));
@@ -120,9 +155,11 @@ export function Library({ initialProfile, onProfile, onOpen }: { initialProfile:
     );
   };
 
-  // A shared link (?view=library&profile=...) loads straight away.
+  // A short link (/u/<profile>) loads straight away; the switch to the canonical handle doesn't reload.
   useEffect(() => {
-    if (initialProfile) load(initialProfile);
+    if (!initialProfile) return;
+    if (data && (profileHandle(data) === initialProfile || data.steamId === initialProfile)) return;
+    load(initialProfile);
   }, [initialProfile]);
 
   const games = useMemo(() => {
@@ -137,18 +174,18 @@ export function Library({ initialProfile, onProfile, onOpen }: { initialProfile:
   const cur = data?.currency ?? "USD";
   const saved = t && t.valueFull > t.valueNow ? t.valueFull - t.valueNow : 0;
 
-  return (
-    <div className="library">
-      <form
+  const form = (
+    <form
         className="steam-import"
         onSubmit={(e) => {
           e.preventDefault();
           // A new profile goes into the URL, which loads it; the same one again just reloads.
+          rememberMine(input.trim());
           if (input.trim() === initialProfile) load(input);
           else onProfile(input.trim());
         }}
       >
-        <label htmlFor="library-profile">What is your Steam library worth?</label>
+        <label htmlFor="library-profile">{data ? "What is yours worth?" : "What is your Steam library worth?"}</label>
         <div className="signin-row">
           <SteamSignIn next="library" />
           <span className="muted small">or paste a profile link:</span>
@@ -171,10 +208,42 @@ export function Library({ initialProfile, onProfile, onOpen }: { initialProfile:
           show what anyone paid, so everything is at today's prices.
         </p>
       </form>
+  );
+  const sub = wrapped ? "wrapped" : vs !== undefined ? "vs" : "profile";
+  const handle = data ? profileHandle(data) : "";
 
-      {data && t && (
+  return (
+    <div className="library">
+      {!data && form}
+      {data && (
+        <nav className="lib-tabs" aria-label="Profile pages">
+          <button className={sub === "profile" ? "active" : ""} onClick={() => onSub({})}>
+            Profile
+          </button>
+          <button className={sub === "wrapped" ? "active" : ""} onClick={() => onSub({ wrapped: true })}>
+            Wrapped
+          </button>
+          <button className={sub === "vs" ? "active" : ""} onClick={() => onSub({ vs: "" })}>
+            Compare
+          </button>
+        </nav>
+      )}
+      {data && sub === "wrapped" && <Wrapped data={data} />}
+      {data && sub === "vs" && <Compare data={data} vs={vs ?? ""} onPick={(other) => onSub({ vs: other })} onOpen={onOpen} />}
+
+
+      {data && t && sub === "profile" && (
         <>
           <ProfileHeader data={data} />
+          <div className="share-row">
+            <ShareButton
+              url={`/u/${encodeURIComponent(handle)}`}
+              title={profileBlurb(data).title}
+              text="What's your Steam library worth?"
+              image={`/api/share/u/${encodeURIComponent(handle)}/story.png`}
+              imageName={`${handle}-steam.png`}
+            />
+          </div>
           <div className="lib-tiles">
             <div className="lib-tile">
               <span className="lib-tile-label">Worth today</span>
@@ -248,6 +317,7 @@ export function Library({ initialProfile, onProfile, onOpen }: { initialProfile:
           {!games.length && <p className="muted">No games match.</p>}
         </>
       )}
+      {data && <div className="lib-yours">{form}</div>}
     </div>
   );
 }

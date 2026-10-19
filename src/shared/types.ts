@@ -211,6 +211,9 @@ export interface LibraryGame {
   reviewPct: number | null;
   reviewCount: number;
   multiplayer: boolean;
+  /** Online co-op, or online versus play: something two friends can play together from home. */
+  onlineCoop: boolean;
+  onlinePvp: boolean;
 }
 
 /** Account facts from Steam; any of them can be missing (private or not returned). */
@@ -260,4 +263,63 @@ export interface LibraryResponse {
   };
   insights: LibraryInsights;
   games: LibraryGame[];
+}
+
+/** A Steam friend, for the "compare with a friend" picker. */
+export interface SteamFriend {
+  steamId: string;
+  name: string;
+  avatar: string | null;
+}
+
+export interface CompareSide {
+  steamId: string;
+  /** For short links: the custom URL name, or the SteamID64. */
+  handle: string;
+  profile: SteamProfile;
+  totals: LibraryResponse["totals"];
+  persona: { key: string; title: string; line: string };
+  topGames: LibraryInsights["topGames"];
+}
+
+/** A game in both libraries. */
+export interface SharedGame {
+  appId: number;
+  id: string | null;
+  name: string;
+  image: string | null;
+  minutesA: number;
+  minutesB: number;
+  reviewPct: number | null;
+  onlineCoop: boolean;
+  onlinePvp: boolean;
+}
+
+/** A game one side loves and the other hasn't played (or doesn't own). */
+export interface Recommendation {
+  appId: number;
+  id: string | null;
+  name: string;
+  image: string | null;
+  minutes: number;
+  /** Whether the other side owns it already. */
+  owned: boolean;
+  priceNow: number | null;
+}
+
+export interface CompareResponse {
+  currency: string;
+  a: CompareSide;
+  b: CompareSide;
+  /** Games both own. */
+  common: number;
+  /** Owned by both, playable together online, best-rated first. */
+  together: SharedGame[];
+  /** Owned and played by both, most shared hours first. */
+  bothPlayed: SharedGame[];
+  /** What A plays most that B hasn't played, and the other way round. */
+  aRecommends: Recommendation[];
+  bRecommends: Recommendation[];
+  /** Share of tag-hours in common (0-1): how alike their tastes are. */
+  tasteMatch: number;
 }

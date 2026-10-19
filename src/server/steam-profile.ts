@@ -1,4 +1,4 @@
-import type { SteamProfile } from "../shared/types.ts";
+import type { SteamFriend, SteamProfile } from "../shared/types.ts";
 import { USER_AGENT, fetchJson } from "./http.ts";
 
 const STEAM_ID64 = /^7656119\d{10}$/;
@@ -96,4 +96,25 @@ export async function fetchSteamProfile(steamId: string, key: string): Promise<S
     badges: badges?.response.badges?.length ?? null,
     friends: friends?.friendslist?.friends?.length ?? null,
   };
+}
+
+/**
+ * A profile's friends with names and avatars, for the compare picker. Empty when the
+ * friend list is private. Steam returns at most 100 summaries per call.
+ */
+export async function fetchFriends(steamId: string, key: string, max = 300): Promise<SteamFriend[]> {
+  const list = await fetchJson<{ friendslist?: { friends?: { steamid: string }[] } }>(
+    `https://api.steampowered.com/ISteamUser/GetFriendList/v1/?${new URLSearchParams({ key, steamid: steamId })}`,
+    { retries: 1, timeoutMs: 15_000 },
+  ).catch(() => null);
+  const ids = (list?.friendslist?.friends ?? []).map((f) => f.steamid).slice(0, max);
+  const friends: SteamFriend[] = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const res = await fetchJson<{ response: { players?: { steamid: string; personaname?: string; avatarmedium?: string }[] } }>(
+      `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?${new URLSearchParams({ key, steamids: ids.slice(i, i + 100).join(",") })}`,
+      { retries: 1, timeoutMs: 15_000 },
+    );
+    for (const p of res.response.players ?? []) friends.push({ steamId: p.steamid, name: p.personaname ?? p.steamid, avatar: p.avatarmedium ?? null });
+  }
+  return friends.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 }

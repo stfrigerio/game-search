@@ -11,7 +11,7 @@ const CLAIMED_ID = /^https:\/\/steamcommunity\.com\/openid\/id\/(7656119\d{10})$
 
 /** Pages that may follow a sign-in, and the URL each lands on. */
 export const DESTINATIONS = {
-  library: (id: string) => `/?view=library&profile=${id}`,
+  library: (id: string) => `/u/${id}?me=1`,
   list: (id: string) => `/?view=list&steam=${id}`,
 } as const;
 export type Destination = keyof typeof DESTINATIONS;

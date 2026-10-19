@@ -7,6 +7,8 @@ import { MediaGallery } from "./MediaGallery.tsx";
 import { Meter } from "./Meter.tsx";
 import { MiniCard } from "./MiniCard.tsx";
 import { SaveButton } from "./SaveButton.tsx";
+import { ShareButton } from "./ShareButton.tsx";
+import { gamePath } from "../../shared/slug.ts";
 import { DECK_LABELS, formatDate, formatPrice, reviewLabel, saleEnds, STORE_NAMES } from "../format.ts";
 
 interface Props {
@@ -67,7 +69,10 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Prop
             {game.image && <img className="hero" src={game.image} alt="" />}
             <div className="detail-title">
               <h2>{game.name}</h2>
-              <SaveButton id={game.id} large />
+              <span className="detail-actions">
+                <SaveButton id={game.id} large />
+                <ShareButton url={gamePath(game.id, game.name)} title={game.name} text={`${game.name}: prices across every store`} />
+              </span>
             </div>
             <p className="detail-facts muted">
               <span>{formatDate(game.releaseDate, game.comingSoon)}</span>

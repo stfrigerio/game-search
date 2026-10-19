@@ -1,5 +1,5 @@
 import { serializeQuery, type SearchQuery } from "../shared/query.ts";
-import type { BestOffer, LibraryResponse, MediaResponse, GameDetailResponse, GameSummary, MetaResponse, PricesResponse, SearchResponse } from "../shared/types.ts";
+import type { BestOffer, CompareResponse, LibraryResponse, SteamFriend, MediaResponse, GameDetailResponse, GameSummary, MetaResponse, PricesResponse, SearchResponse } from "../shared/types.ts";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -36,6 +36,8 @@ export const api = {
       body: JSON.stringify({ ids }),
     }),
   library: (profile: string) => request<LibraryResponse>(`/api/steam/library?profile=${encodeURIComponent(profile)}`),
+  friends: (profile: string) => request<SteamFriend[]>(`/api/steam/friends?profile=${encodeURIComponent(profile)}`),
+  compare: (a: string, b: string) => request<CompareResponse>(`/api/steam/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`),
   steamWishlist: (profile: string) =>
     request<{ steamId: string; ids: string[]; total: number }>(`/api/steam/wishlist?profile=${encodeURIComponent(profile)}`),
 };

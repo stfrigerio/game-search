@@ -10,6 +10,7 @@ import { GameDetail } from "./components/GameDetail.tsx";
 import { ResultCard } from "./components/ResultCard.tsx";
 import { SteamImport } from "./components/SteamImport.tsx";
 import { formatCount, STORE_NAMES } from "./format.ts";
+import { gameIdFromSlug } from "../shared/slug.ts";
 import { BUDDY, BUDDY_BLINK, Pixel, SLIME, SLIME_BLINK } from "./pixel.tsx";
 import { useSavedList } from "./savedList.ts";
 
@@ -21,6 +22,9 @@ interface UrlState {
   gameId: string | null;
   /** Steam profile shown on the Library page. */
   profile?: string;
+  /** Library sub-pages: the Wrapped story, or a comparison with another profile. */
+  wrapped?: boolean;
+  vs?: string;
 }
 
 /** All state lives in the URL so any search can be bookmarked or shared. */
@@ -28,6 +32,21 @@ function readUrl(): UrlState {
   const params = new URLSearchParams(location.search);
   const query = parseQuery(params);
   const isDefault = serializeQuery(query).size === 0;
+  // Short links: /u/<profile>, /u/<profile>/wrapped, /u/<profile>/vs/<other>, and /game/<id-name>.
+  const path = location.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+  if (path[0] === "u" && path[1]) {
+    return {
+      view: "library",
+      query: DEFAULT_QUERY,
+      gameId: params.get("game"),
+      profile: path[1],
+      ...(path[2] === "wrapped" ? { wrapped: true } : {}),
+      ...(path[2] === "vs" ? { vs: path[3] ?? "" } : {}),
+    };
+  }
+  if (path[0] === "game" && path[1]) {
+    return { view: "discover", query: DEFAULT_QUERY, gameId: gameIdFromSlug(path[1]) };
+  }
   if (params.get("view") === "library") {
     return { view: "library", query, gameId: params.get("game"), profile: params.get("profile") ?? "" };
   }
@@ -39,12 +58,15 @@ function readUrl(): UrlState {
   return { view, query, gameId: params.get("game"), ...(steam ? { profile: steam } : {}) };
 }
 
-function urlFor({ view, query, gameId, profile }: UrlState): string {
+function urlFor({ view, query, gameId, profile, wrapped, vs }: UrlState): string {
+  if (view === "library" && profile) {
+    const base = `/u/${encodeURIComponent(profile)}${wrapped ? "/wrapped" : vs !== undefined ? `/vs${vs ? `/${encodeURIComponent(vs)}` : ""}` : ""}`;
+    return gameId ? `${base}?game=${encodeURIComponent(gameId)}` : base;
+  }
   const params = view === "library" ? new URLSearchParams({ view: "library" }) : serializeQuery(query);
-  if (view === "library" && profile) params.set("profile", profile);
   if (view === "list") params.set("view", "list");
   if (gameId) params.set("game", gameId);
-  return `${location.pathname}${params.size ? `?${params}` : ""}`;
+  return `/${params.size ? `?${params}` : ""}`;
 }
 
 export function App() {
@@ -295,7 +317,11 @@ export function App() {
         <div className="layout single">
           <Library
             initialProfile={state.profile ?? ""}
-            onProfile={(profile) => navigate({ view: "library", query: DEFAULT_QUERY, gameId: null, profile }, false)}
+            wrapped={!!state.wrapped}
+            vs={state.vs}
+            onProfile={(profile) => navigate({ view: "library", query: DEFAULT_QUERY, gameId: null, profile })}
+            onCanonical={(profile) => navigate({ ...state, profile }, false)}
+            onSub={(sub) => navigate({ view: "library", query: DEFAULT_QUERY, gameId: null, profile: state.profile, ...sub })}
             onOpen={openGame}
           />
         </div>

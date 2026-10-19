@@ -30,7 +30,10 @@ export interface CatalogRow {
   features: number;
 }
 
-const MULTI_BIT = 1 << FEATURES.findIndex((f) => f.key === "multi");
+const bit = (key: string) => 1 << FEATURES.findIndex((f) => f.key === key);
+const MULTI_BIT = bit("multi");
+const ONLINE_COOP_BIT = bit("onlineCoop");
+const ONLINE_PVP_BIT = bit("onlinePvp") | bit("mmo");
 
 /** Per-game rows and totals from owned games and our catalogue (pure; tested). */
 export function buildLibrary(owned: OwnedGame[], catalog: Map<number, CatalogRow>): Pick<LibraryResponse, "totals" | "games"> {
@@ -53,6 +56,8 @@ export function buildLibrary(owned: OwnedGame[], catalog: Map<number, CatalogRow
       reviewPct: c && c.review_count > 0 ? c.review_pct : null,
       reviewCount: c?.review_count ?? 0,
       multiplayer: c ? (c.features & MULTI_BIT) !== 0 : false,
+      onlineCoop: c ? (c.features & ONLINE_COOP_BIT) !== 0 : false,
+      onlinePvp: c ? (c.features & ONLINE_PVP_BIT) !== 0 : false,
     };
   });
   const totals = { games: games.length, priced: 0, free: 0, valueNow: 0, valueFull: 0, playtimeMinutes: 0, neverPlayed: 0, neverPlayedValue: 0 };

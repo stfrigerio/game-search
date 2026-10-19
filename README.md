@@ -62,6 +62,15 @@ across official stores and key resellers (G2A, Kinguin, Eneba, Instant Gaming, â
   Steam ID) or paste a profile link (game details must be public) to see what the
   library is worth today and at full price, hours played, cost per hour played, and the
   never-played pile. Steam doesn't reveal what anyone paid, so values are at today's prices.
+- **Sharing**: every profile has a short link (`/u/<custom URL name or SteamID64>`) whose
+  link preview is a card drawn for that profile, a **Wrapped** story
+  (`/u/<name>/wrapped`: hours, top game, best value per hour, pile of shame, a gaming
+  personality), each slide saveable as a 1080Ã—1920 image, and **Compare**
+  (`/u/<name>/vs/<friend>`): games in common, what you can play together online, taste
+  match and what each should try. The images are drawn on the server with satori and
+  resvg (`src/server/share-image.ts`), using the WOFF fonts in `public/fonts`.
+- **Game pages**: `/game/steam-620-portal-2` opens a game directly, with its own title,
+  description, image and structured data for search engines; `/sitemap.xml` lists them.
 - Every search is in the URL, so you can bookmark or share it.
 
 ## Running it

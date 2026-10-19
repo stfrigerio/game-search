@@ -720,3 +720,59 @@ svg .alt { visibility: hidden; }
 .power-head .meter i:nth-child(1) { height: 7px; }
 .power-head .meter i:nth-child(2) { height: 11px; }
 .power-head .meter i:nth-child(3) { height: 16px; }
+
+/* ---- sharing ---- */
+.share { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .3rem; }
+.share-note { min-width: 0; color: var(--green); font-weight: 700; }
+.share-note:empty { display: none; }
+.share-row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 0 0 1.4rem; }
+.detail-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+
+/* Profile / Wrapped / Compare: the site's tabs, smaller. */
+.lib-tabs { display: flex; flex-wrap: wrap; gap: .2rem; margin: 0 0 1.2rem; }
+.lib-tabs button { font: 400 1.35rem/1 var(--display); padding: .5rem .65rem; white-space: nowrap; }
+.lib-tabs button:hover { background: var(--yellow); }
+.lib-tabs button.active { background: linear-gradient(transparent 52%, var(--yellow) 52%, var(--yellow) 88%, transparent 88%); }
+.lib-yours { margin-top: 2.5rem; }
+
+/* ---- Wrapped: a phone-shaped story ---- */
+.wrapped { display: grid; justify-items: center; gap: .6rem; margin: 0 auto 1rem; max-width: 420px; }
+.wrapped-bars { display: flex; gap: 4px; width: 100%; }
+.wrapped-bars span { flex: 1; height: 6px; background: var(--line); }
+.wrapped-bars span.done { background: var(--ink); }
+.wrapped-stage { position: relative; width: 100%; aspect-ratio: 9 / 16; background: var(--card); box-shadow: var(--frame), var(--drop); }
+.wrapped-stage img { display: block; width: 100%; height: 100%; }
+.wrapped-tap { position: absolute; top: 0; bottom: 0; width: 40%; background: none; border: 0; cursor: pointer; }
+.wrapped-tap.prev { left: 0; cursor: w-resize; }
+.wrapped-tap.next { right: 0; width: 60%; cursor: e-resize; }
+.wrapped-tap:disabled { cursor: default; }
+.wrapped-tap:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.wrapped-count { margin: 0; }
+.wrapped-actions { display: flex; justify-content: center; }
+
+/* ---- Compare ---- */
+.compare-pick .steam-import { margin-bottom: 1rem; }
+.friend-filter { width: 100%; max-width: 320px; margin: 0 var(--u) .8rem; }
+.friends { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: .5rem; }
+.friends button { display: flex; align-items: center; gap: .6rem; width: 100%; padding: .4rem; text-align: left; background: var(--card); box-shadow: var(--thin); font: inherit; color: inherit; cursor: pointer; }
+.friends button:hover { background: var(--yellow); }
+.friends img, .friend-blank { width: 40px; height: 40px; flex: none; background: var(--line); }
+.friends span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1rem; margin: .4rem var(--u) 1.4rem; }
+.cmp-side { display: grid; gap: .35rem; justify-items: start; }
+.cmp-side.right { justify-items: end; text-align: right; }
+.cmp-side img { width: 72px; height: 72px; box-shadow: var(--frame); }
+.cmp-side strong { font-size: 1.3rem; overflow-wrap: anywhere; }
+.cmp-vs { font: 400 clamp(2.5rem, 8vw, 4.5rem)/1 var(--poster); color: var(--grape); }
+.sticker { font: 400 1.25rem/1 var(--display); background: var(--yellow); padding: .25rem .45rem; box-shadow: var(--thin); }
+.cmp-games { list-style: none; margin: 0 0 1.2rem; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
+.cmp-game button { display: grid; gap: .25rem; width: 100%; padding: 0 0 .5rem; text-align: left; background: var(--card); box-shadow: var(--frame); font: inherit; color: inherit; cursor: pointer; }
+.cmp-game button:hover:not(:disabled) { background: var(--yellow-soft); }
+.cmp-game button:disabled { cursor: default; }
+.cmp-game img { width: 100%; aspect-ratio: 460 / 215; object-fit: cover; display: block; }
+.cmp-game strong, .cmp-game span { padding: 0 .6rem; }
+@media (max-width: 560px) {
+  .cmp-head { grid-template-columns: 1fr; }
+  .cmp-side.right { justify-items: start; text-align: left; }
+  .cmp-vs { font-size: 2rem; }
+}
