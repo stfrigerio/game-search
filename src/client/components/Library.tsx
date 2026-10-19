@@ -3,6 +3,7 @@ import type { LibraryGame, LibraryResponse } from "../../shared/types.ts";
 import { api } from "../api.ts";
 import { formatCount, formatPrice } from "../format.ts";
 import { ChartCard, Columns, HBars, TierBar } from "./Charts.tsx";
+import { signInFailed, SteamSignIn } from "./SteamSignIn.tsx";
 
 const PROFILE_KEY = "game-search:steam-profile";
 const PAGE = 60;
@@ -87,7 +88,9 @@ export function Library({ initialProfile, onProfile, onOpen }: { initialProfile:
     }
   });
   const [data, setData] = useState<LibraryResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    signInFailed() ? "Steam didn't confirm the sign-in. Try again, or paste your profile link." : null,
+  );
   const [loading, setLoading] = useState(false);
   const [sort, setSort] = useState<Sort>("value");
   const [unplayedOnly, setUnplayedOnly] = useState(false);
@@ -146,6 +149,10 @@ export function Library({ initialProfile, onProfile, onOpen }: { initialProfile:
         }}
       >
         <label htmlFor="library-profile">What is your Steam library worth?</label>
+        <div className="signin-row">
+          <SteamSignIn next="library" />
+          <span className="muted small">or paste a profile link:</span>
+        </div>
         <div className="steam-import-row">
           <input
             id="library-profile"
@@ -154,13 +161,14 @@ export function Library({ initialProfile, onProfile, onOpen }: { initialProfile:
             value={input}
             onChange={(e) => setInput(e.target.value)}
           />
-          <button className="primary" disabled={loading || !input.trim()}>
+          <button className="secondary" disabled={loading || !input.trim()}>
             {loading ? "Counting…" : "Value it"}
           </button>
         </div>
         {error && <p className="error small">{error}</p>}
         <p className="muted small">
-          The profile's game details must be public. Steam doesn't show what anyone paid, so everything is at today's prices.
+          Signing in only tells us your Steam ID, nothing else. The profile's game details must be public. Steam doesn't
+          show what anyone paid, so everything is at today's prices.
         </p>
       </form>
 

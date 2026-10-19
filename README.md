@@ -58,7 +58,8 @@ across official stores and key resellers (G2A, Kinguin, Eneba, Instant Gaming, â
   anywhere for each game, flags when it's cheaper outside Steam or at its historic low,
   and supports every filter and sort ("on sale, sorted by best deal").
   The list is stored in your browser; there are no accounts.
-- **Library**: enter a Steam profile (game details must be public) to see what the
+- **Library**: sign in with Steam (one click, Steam's own login; we only learn the
+  Steam ID) or paste a profile link (game details must be public) to see what the
   library is worth today and at full price, hours played, cost per hour played, and the
   never-played pile. Steam doesn't reveal what anyone paid, so values are at today's prices.
 - Every search is in the URL, so you can bookmark or share it.
@@ -106,6 +107,7 @@ is rebuilt by a separate nightly job, `node dist-server/crawl-cli.js`; see
 | `SKIP_STEAMSPY`  | unset   | `1` skips the ~5 min SteamSpy player-count crawl          |
 | `SPECS_PAUSE_MS` | `1600`  | Pause between system-requirement requests; `0` turns them off |
 | `STEAM_API_KEY`  | unset   | Steam Web API key for the Library page (library value)    |
+| `SITE_URL`       | the site | Public address "Sign in with Steam" returns to (production default `https://gamesearch.manong.app`; local dev uses the request's host) |
 | `DB_POOL_SIZE`   | `6`     | Max Postgres connections from the web server              |
 
 E.g. `STORE_COUNTRY=IT STORE_CURRENCY=EUR npm run crawl` for Italian euro prices.

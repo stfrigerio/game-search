@@ -9,6 +9,7 @@ import { closeDb } from "./db/pool.ts";
 import { existingIds, getGameDetail, getGames, getMeta, PAGE_SIZE, searchGames, similarGames } from "./db/search.ts";
 import { getLibrary, LibraryError } from "./library.ts";
 import { getMedia } from "./media.ts";
+import { DESTINATIONS, isDestination, steamLoginUrl, verifySteamLogin } from "./steam-openid.ts";
 import { getPrices, getPricesBatch } from "./prices.ts";
 import { readSpecsForever } from "./specs.ts";
 import { fetchWishlist, resolveSteamId } from "./steam-profile.ts";
@@ -51,6 +52,29 @@ app.post(
     const params = new URLSearchParams(typeof req.body?.params === "string" ? req.body.params : "");
     const ids = Array.isArray(req.body?.ids) ? stringIds(req.body.ids, 5000) : undefined;
     res.json(await searchGames(parseQuery(params), pageSizeOf(params.get("pageSize")), ids));
+  }),
+);
+
+// "Sign in with Steam" (OpenID): one click instead of pasting a profile link. Nothing
+// is stored; the verified SteamID64 goes into the URL of the page that asked.
+const siteOf = (req: Request) => config.siteUrl || `${req.protocol}://${req.get("host")}`;
+
+app.get("/api/auth/steam", (req, res) => {
+  const next = isDestination(req.query.next) ? req.query.next : "library";
+  res.redirect(302, steamLoginUrl(siteOf(req), next));
+});
+
+app.get(
+  "/api/auth/steam/return",
+  route(async (req, res) => {
+    const next = isDestination(req.query.next) ? req.query.next : "library";
+    let id: string | null = null;
+    try {
+      id = await verifySteamLogin(req.query as Record<string, unknown>, siteOf(req));
+    } catch (err) {
+      console.warn("Steam sign-in check failed:", String(err));
+    }
+    res.redirect(302, id ? DESTINATIONS[next](id) : `/?view=${next}&signin=failed`);
   }),
 );
 

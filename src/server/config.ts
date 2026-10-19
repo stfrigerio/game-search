@@ -8,6 +8,12 @@ export const config = {
   specsPauseMs: Number(env.SPECS_PAUSE_MS ?? 1600),
   /** Steam Web API key, for reading game libraries (Library page). Unset turns that page off. */
   steamApiKey: env.STEAM_API_KEY ?? "",
+  /**
+   * The site's public address, where "Sign in with Steam" returns to. Same default as
+   * the front-end build; in development (no NODE_ENV=production) the request's own
+   * host is used instead, so localhost works.
+   */
+  siteUrl: (env.SITE_URL ?? (env.NODE_ENV === "production" ? "https://gamesearch.manong.app" : "")).replace(/\/$/, ""),
 };
 
 export const crawlerConfig = {

@@ -34,7 +34,9 @@ function readUrl(): UrlState {
   const view: View = params.get("view") === "list" ? "list" : isDefault ? "discover" : "search";
   // Wishlists are full of unreleased games, so the list shows them unless told otherwise.
   if (view === "list" && !params.has("upcoming")) query.upcoming = "include";
-  return { view, query, gameId: params.get("game") };
+  // Back from "Sign in with Steam" on the list: the verified id to import.
+  const steam = view === "list" ? params.get("steam") : null;
+  return { view, query, gameId: params.get("game"), ...(steam ? { profile: steam } : {}) };
 }
 
 function urlFor({ view, query, gameId, profile }: UrlState): string {
@@ -314,7 +316,7 @@ export function App() {
           </div>
 
           <main>
-            {view === "list" && <SteamImport />}
+            {view === "list" && <SteamImport steamId={state.profile} />}
             <QuickFilters query={query} currency={currency} onChange={update} />
             <ActiveFilters query={query} currency={currency} onChange={update} />
             <div className="results-bar">

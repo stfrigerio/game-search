@@ -83,7 +83,7 @@ button { cursor: pointer; background: none; border: 0; padding: 0; }
 button:disabled { cursor: default; }
 
 /* A proper button: a white key with a hard shadow. Pressing it pushes it into the shadow. */
-.primary, .hero-actions button, .pager button, .filters-toggle, .save-large, .shop-link {
+.primary, .secondary, .hero-actions button, .pager button, .filters-toggle, .save-large, .shop-link {
   display: inline-flex; align-items: center; gap: .5rem;
   font: 400 1.39rem/1 var(--display);
   padding: .6rem .95rem; margin: var(--u);
@@ -92,11 +92,11 @@ button:disabled { cursor: default; }
   transition: transform .06s steps(2), box-shadow .06s steps(2);
 }
 .primary { background: var(--yellow); }
-.primary:hover, .hero-actions button:hover, .pager button:hover, .filters-toggle:hover, .save-large:hover, .shop-link:hover { --shade: var(--red); background: var(--yellow); }
-.primary:active, .hero-actions button:active, .pager button:active, .filters-toggle:active, .save-large:active, .shop-link:active {
+.primary:hover, .secondary:hover, .hero-actions button:hover, .pager button:hover, .filters-toggle:hover, .save-large:hover, .shop-link:hover { --shade: var(--red); background: var(--yellow); }
+.primary:active, .secondary:active, .hero-actions button:active, .pager button:active, .filters-toggle:active, .save-large:active, .shop-link:active {
   transform: translate(calc(2 * var(--u)), calc(2 * var(--u))); box-shadow: var(--frame);
 }
-.primary:disabled, .pager button:disabled { background: var(--paper); color: var(--ink-soft); box-shadow: var(--frame); transform: none; }
+.primary:disabled, .secondary:disabled, .pager button:disabled { background: var(--paper); color: var(--ink-soft); box-shadow: var(--frame); transform: none; }
 
 .link-button { font: 400 1.32rem/1.2 var(--display); color: var(--ink); padding: .15rem .3rem; text-decoration: underline; text-decoration-color: var(--red); text-decoration-thickness: 3px; text-underline-offset: .25em; }
 .link-button:hover { background: var(--yellow); }
@@ -390,7 +390,10 @@ footer p { margin: 0 0 .2rem; max-width: 80ch; }
 .lib-row:last-child { border-bottom: 0; }
 .lib-header { padding-top: .6rem; padding-bottom: .4rem; }
 .lib-header span:not(:first-child) { text-align: right; }
-.library .steam-import .primary { white-space: nowrap; }
+.steam-import .secondary { white-space: nowrap; }
+.signin-row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; }
+.steam-signin { text-decoration: none; }
+.steam-signin svg { flex: none; }
 .lib-open { display: flex; align-items: center; gap: .8rem; min-width: 0; padding: 0; background: none; text-align: left; color: var(--ink); }
 .lib-open:not(:disabled):hover .lib-name { background: var(--yellow); }
 .lib-open:disabled { cursor: default; }
