@@ -741,7 +741,11 @@ svg .alt { visibility: hidden; }
 .wrapped-bars span { flex: 1; height: 6px; background: var(--line); }
 .wrapped-bars span.done { background: var(--ink); }
 .wrapped-stage { position: relative; width: 100%; aspect-ratio: 9 / 16; background: var(--card); box-shadow: var(--frame), var(--drop); }
-.wrapped-stage img { display: block; width: 100%; height: 100%; }
+.wrapped-stage { touch-action: pan-y; user-select: none; -webkit-user-select: none; overflow: hidden; }
+.wrapped-stage img { display: block; width: 100%; height: 100%; transition: transform .18s ease-out; animation: slide-in .18s ease-out; }
+.wrapped-stage.dragging img { transition: none; }
+@keyframes slide-in { from { opacity: .4; transform: scale(.97); } }
+@media (prefers-reduced-motion: reduce) { .wrapped-stage img { transition: none; animation: none; } }
 .wrapped-tap { position: absolute; top: 0; bottom: 0; width: 40%; background: none; border: 0; cursor: pointer; }
 .wrapped-tap.prev { left: 0; cursor: w-resize; }
 .wrapped-tap.next { right: 0; width: 60%; cursor: e-resize; }
