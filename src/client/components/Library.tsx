@@ -119,6 +119,13 @@ export function Library({
       return "";
     }
   });
+  // The profile this visitor said is theirs (signed in, or typed here).
+  const [mine, setMine] = useState(input);
+  const remember = (profile: string) => {
+    rememberMine(profile);
+    setMine(profile);
+  };
+  const [showForm, setShowForm] = useState(false);
   const [data, setData] = useState<LibraryResponse | null>(null);
   const [error, setError] = useState<string | null>(() =>
     signInFailed() ? "Steam didn't confirm the sign-in. Try again, or paste your profile link." : null,
@@ -140,8 +147,10 @@ export function Library({
         setShown(PAGE);
         // Back from "Sign in with Steam": this one is the visitor's own.
         const params = new URLSearchParams(location.search);
+        // A profile typed into the form is kept by its short handle, so it's recognised on its short link.
+        if (params.has("me") || mine.trim() === profile.trim()) remember(profileHandle(d));
+        setShowForm(false);
         if (params.has("me")) {
-          rememberMine(profileHandle(d));
           params.delete("me");
           history.replaceState(history.state, "", `${location.pathname}${params.size ? `?${params}` : ""}`);
         }
@@ -174,18 +183,19 @@ export function Library({
   const cur = data?.currency ?? "USD";
   const saved = t && t.valueFull > t.valueNow ? t.valueFull - t.valueNow : 0;
 
+  const isMine = !!data && [profileHandle(data), data.steamId].some((id) => id.toLowerCase() === mine.trim().toLowerCase());
   const form = (
     <form
         className="steam-import"
         onSubmit={(e) => {
           e.preventDefault();
           // A new profile goes into the URL, which loads it; the same one again just reloads.
-          rememberMine(input.trim());
+          remember(input.trim());
           if (input.trim() === initialProfile) load(input);
           else onProfile(input.trim());
         }}
       >
-        <label htmlFor="library-profile">{data ? "What is yours worth?" : "What is your Steam library worth?"}</label>
+        <label htmlFor="library-profile">{!data ? "What is your Steam library worth?" : isMine ? "Look up another Steam library" : "What is yours worth?"}</label>
         <div className="signin-row">
           <SteamSignIn next="library" />
           <span className="muted small">or paste a profile link:</span>
@@ -317,7 +327,17 @@ export function Library({
           {!games.length && <p className="muted">No games match.</p>}
         </>
       )}
-      {data && <div className="lib-yours">{form}</div>}
+      {/* On someone else's profile: the invitation to value yours. On your own, just a way to look up another. */}
+      {data &&
+        (isMine && !showForm ? (
+          <p className="lib-yours small">
+            <button className="link-button" onClick={() => setShowForm(true)}>
+              Look up another profile
+            </button>
+          </p>
+        ) : (
+          <div className="lib-yours">{form}</div>
+        ))}
     </div>
   );
 }
