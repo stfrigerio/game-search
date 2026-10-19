@@ -1,3 +1,4 @@
+import type { SteamProfile } from "../shared/types.ts";
 import { USER_AGENT, fetchJson } from "./http.ts";
 
 const STEAM_ID64 = /^7656119\d{10}$/;
@@ -43,7 +44,7 @@ export interface OwnedGame {
   appid: number;
   name?: string;
   playtime_forever: number;
-  rtime_last_played?: number;
+  playtime_2weeks?: number;
 }
 
 /**
@@ -66,13 +67,33 @@ export async function fetchOwnedGames(steamId: string, key: string): Promise<Own
   return res.response.game_count === undefined ? null : (res.response.games ?? []);
 }
 
-/** Display name and avatar of a profile, if Steam returns them. */
-export async function fetchPlayerSummary(steamId: string, key: string): Promise<{ name: string; avatar: string | null } | null> {
-  const params = new URLSearchParams({ key, steamids: steamId });
-  const res = await fetchJson<{ response: { players?: { personaname?: string; avatarmedium?: string }[] } }>(
-    `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?${params}`,
-    { retries: 1, timeoutMs: 15_000 },
-  );
-  const p = res.response.players?.[0];
-  return p?.personaname ? { name: p.personaname, avatar: p.avatarmedium ?? null } : null;
+/**
+ * Account facts: name, avatar, member since, country, Steam level, badges and
+ * friends. Each comes from a separate call and any of them may be private or fail;
+ * those just come back empty.
+ */
+export async function fetchSteamProfile(steamId: string, key: string): Promise<SteamProfile> {
+  const api = <T,>(path: string, params: Record<string, string>) =>
+    fetchJson<T>(`https://api.steampowered.com/${path}?${new URLSearchParams({ key, ...params })}`, { retries: 1, timeoutMs: 15_000 }).catch(
+      () => null,
+    );
+  const [summary, badges, friends] = await Promise.all([
+    api<{ response: { players?: { personaname?: string; avatarmedium?: string; profileurl?: string; timecreated?: number; loccountrycode?: string }[] } }>(
+      "ISteamUser/GetPlayerSummaries/v2/",
+      { steamids: steamId },
+    ),
+    api<{ response: { player_level?: number; badges?: unknown[] } }>("IPlayerService/GetBadges/v1/", { steamid: steamId }),
+    api<{ friendslist?: { friends?: unknown[] } }>("ISteamUser/GetFriendList/v1/", { steamid: steamId }),
+  ]);
+  const p = summary?.response.players?.[0];
+  return {
+    name: p?.personaname ?? null,
+    avatar: p?.avatarmedium ?? null,
+    profileUrl: p?.profileurl ?? null,
+    country: p?.loccountrycode ?? null,
+    memberSince: p?.timecreated ?? null,
+    level: badges?.response.player_level ?? null,
+    badges: badges?.response.badges?.length ?? null,
+    friends: friends?.friendslist?.friends?.length ?? null,
+  };
 }

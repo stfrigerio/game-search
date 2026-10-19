@@ -1,7 +1,8 @@
-import type { LibraryGame, LibraryResponse } from "../shared/types.ts";
+import { FEATURES } from "../shared/features.ts";
+import type { LibraryGame, LibraryInsights, LibraryResponse, SteamProfile } from "../shared/types.ts";
 import { db } from "./db/pool.ts";
 import { LIVE } from "./db/schema.ts";
-import { fetchOwnedGames, fetchPlayerSummary, type OwnedGame } from "./steam-profile.ts";
+import { fetchOwnedGames, fetchSteamProfile, type OwnedGame } from "./steam-profile.ts";
 
 export class LibraryError extends Error {
   constructor(
@@ -12,7 +13,7 @@ export class LibraryError extends Error {
   }
 }
 
-interface PriceRow {
+export interface CatalogRow {
   steam_app_id: number;
   id: string;
   name: string;
@@ -21,38 +22,40 @@ interface PriceRow {
   best_price: number | null;
   best_base_price: number | null;
   best_discount: number;
+  tags: string[];
+  release_date: number | null;
+  rating: number;
+  review_pct: number;
+  review_count: number;
+  features: number;
 }
 
-/** Totals and per-game rows from owned games and our catalogue's prices (pure; tested). */
-export function buildLibrary(
-  owned: OwnedGame[],
-  prices: Map<number, PriceRow>,
-): Pick<LibraryResponse, "totals" | "games"> {
+const MULTI_BIT = 1 << FEATURES.findIndex((f) => f.key === "multi");
+
+/** Per-game rows and totals from owned games and our catalogue (pure; tested). */
+export function buildLibrary(owned: OwnedGame[], catalog: Map<number, CatalogRow>): Pick<LibraryResponse, "totals" | "games"> {
   const games: LibraryGame[] = owned.map((o) => {
-    const p = prices.get(o.appid);
+    const c = catalog.get(o.appid);
     return {
       appId: o.appid,
-      id: p?.id ?? null,
-      name: p?.name ?? o.name ?? `App ${o.appid}`,
-      image: p?.image ?? null,
+      id: c?.id ?? null,
+      name: c?.name ?? o.name ?? `App ${o.appid}`,
+      image: c?.image ?? null,
       playtimeMinutes: o.playtime_forever ?? 0,
-      lastPlayed: o.rtime_last_played || null,
-      free: p?.free ?? false,
-      priceNow: p ? (p.free ? 0 : p.best_price) : null,
-      priceFull: p ? (p.free ? 0 : (p.best_base_price ?? p.best_price)) : null,
-      discountPct: p?.best_discount ?? 0,
+      recentMinutes: o.playtime_2weeks ?? 0,
+      free: c?.free ?? false,
+      priceNow: c ? (c.free ? 0 : c.best_price) : null,
+      priceFull: c ? (c.free ? 0 : (c.best_base_price ?? c.best_price)) : null,
+      discountPct: c?.best_discount ?? 0,
+      tags: c?.tags ?? [],
+      releaseYear: c?.release_date ? new Date(c.release_date * 1000).getUTCFullYear() : null,
+      rating: c && c.review_count > 0 ? Math.round(c.rating * 10) / 10 : null,
+      reviewPct: c && c.review_count > 0 ? c.review_pct : null,
+      reviewCount: c?.review_count ?? 0,
+      multiplayer: c ? (c.features & MULTI_BIT) !== 0 : false,
     };
   });
-  const totals = {
-    games: games.length,
-    priced: 0,
-    free: 0,
-    valueNow: 0,
-    valueFull: 0,
-    playtimeMinutes: 0,
-    neverPlayed: 0,
-    neverPlayedValue: 0,
-  };
+  const totals = { games: games.length, priced: 0, free: 0, valueNow: 0, valueFull: 0, playtimeMinutes: 0, neverPlayed: 0, neverPlayedValue: 0 };
   for (const g of games) {
     totals.playtimeMinutes += g.playtimeMinutes;
     if (g.free) totals.free++;
@@ -69,10 +72,74 @@ export function buildLibrary(
   return { totals, games };
 }
 
+const TAGS_PER_GAME = 3;
+// Tags that describe nearly everything and would top every chart.
+const GENERIC_TAGS = new Set(["singleplayer", "indie", "multiplayer", "great soundtrack", "atmospheric", "2d", "3d", "casual", "early access", "free to play"]);
+
+/** What the profile page charts (pure; tested). */
+export function buildInsights(games: LibraryGame[]): LibraryInsights {
+  const pick = (g: LibraryGame) => ({ appId: g.appId, id: g.id, name: g.name });
+  const played = games.filter((g) => g.playtimeMinutes > 0).sort((a, b) => b.playtimeMinutes - a.playtimeMinutes);
+  const total = played.reduce((n, g) => n + g.playtimeMinutes, 0);
+
+  const tagMap = new Map<string, { minutes: number; games: number }>();
+  for (const g of played) {
+    for (const tag of g.tags.filter((t) => !GENERIC_TAGS.has(t.toLowerCase())).slice(0, TAGS_PER_GAME)) {
+      const e = tagMap.get(tag) ?? { minutes: 0, games: 0 };
+      e.minutes += g.playtimeMinutes;
+      e.games++;
+      tagMap.set(tag, e);
+    }
+  }
+
+  const yearMap = new Map<number, { games: number; minutes: number; unplayed: number }>();
+  for (const g of games) {
+    if (g.releaseYear === null) continue;
+    const e = yearMap.get(g.releaseYear) ?? { games: 0, minutes: 0, unplayed: 0 };
+    e.games++;
+    e.minutes += g.playtimeMinutes;
+    if (g.playtimeMinutes === 0) e.unplayed++;
+    yearMap.set(g.releaseYear, e);
+  }
+  // Fill gaps so the columns read as a continuous timeline.
+  const years = [...yearMap.keys()];
+  const byYear: LibraryInsights["byYear"] = [];
+  if (years.length) {
+    for (let y = Math.min(...years); y <= Math.max(...years); y++) byYear.push({ year: y, ...(yearMap.get(y) ?? { games: 0, minutes: 0, unplayed: 0 }) });
+  }
+
+  const share = (n: number) => (total ? n / total : 0);
+  const top1 = played[0]?.playtimeMinutes ?? 0;
+  const next9 = played.slice(1, 10).reduce((n, g) => n + g.playtimeMinutes, 0);
+
+  const rated = played.filter((g) => g.reviewPct !== null);
+  const ratedMinutes = rated.reduce((n, g) => n + g.playtimeMinutes, 0);
+
+  return {
+    topGames: played.slice(0, 10).map((g) => ({ ...pick(g), minutes: g.playtimeMinutes })),
+    byTag: [...tagMap].map(([tag, e]) => ({ tag, ...e })).sort((a, b) => b.minutes - a.minutes).slice(0, 10),
+    byYear,
+    concentration: { top1: share(top1), next9: share(next9), rest: total ? 1 - share(top1) - share(next9) : 0 },
+    recent: games
+      .filter((g) => g.recentMinutes > 0)
+      .sort((a, b) => b.recentMinutes - a.recentMinutes)
+      .slice(0, 8)
+      .map((g) => ({ ...pick(g), minutes: g.recentMinutes })),
+    unplayedGems: games
+      .filter((g) => g.playtimeMinutes === 0 && g.rating !== null && g.reviewCount >= 50)
+      .sort((a, b) => b.rating! - a.rating!)
+      .slice(0, 10)
+      .map((g) => ({ ...pick(g), rating: g.rating!, reviewPct: g.reviewPct!, priceNow: g.priceNow })),
+    avgReviewPct: ratedMinutes ? Math.round(rated.reduce((n, g) => n + g.reviewPct! * g.playtimeMinutes, 0) / ratedMinutes) : null,
+    multiplayerMinutes: played.filter((g) => g.multiplayer).reduce((n, g) => n + g.playtimeMinutes, 0),
+    recentMinutes: games.reduce((n, g) => n + g.recentMinutes, 0),
+  };
+}
+
 const cache = new Map<string, { at: number; value: Promise<LibraryResponse> }>();
 const CACHE_MS = 10 * 60 * 1000;
 
-/** A profile's library, priced from the catalogue. Cached for ten minutes per profile. */
+/** A profile's library, priced and charted. Cached for ten minutes per profile. */
 export function getLibrary(steamId: string, key: string): Promise<LibraryResponse> {
   const hit = cache.get(steamId);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.value;
@@ -84,31 +151,26 @@ export function getLibrary(steamId: string, key: string): Promise<LibraryRespons
 }
 
 async function loadLibrary(steamId: string, key: string): Promise<LibraryResponse> {
-  const [owned, profile] = await Promise.all([
-    fetchOwnedGames(steamId, key),
-    fetchPlayerSummary(steamId, key).catch(() => null),
-  ]);
+  const [owned, profile] = await Promise.all([fetchOwnedGames(steamId, key), fetchSteamProfile(steamId, key)]);
   if (owned === null) {
-    throw new LibraryError(
-      "That library is private. In Steam: Profile → Edit Profile → Privacy Settings → Game details: Public.",
-      404,
-    );
+    throw new LibraryError("That library is private. In Steam: Profile → Edit Profile → Privacy Settings → Game details: Public.", 404);
   }
   const [rows, meta] = await Promise.all([
-    db().query<PriceRow>(
-      `SELECT g.steam_app_id, g.id, d.name, d.image, g.free, g.best_price, g.best_base_price, g.best_discount
+    db().query<CatalogRow>(
+      `SELECT g.steam_app_id, g.id, d.name, d.image, g.free, g.best_price, g.best_base_price, g.best_discount,
+              d.tags[1:8] AS tags, g.release_date, g.rating, g.review_pct, g.review_count, g.features
          FROM ${LIVE}.games g JOIN ${LIVE}.game_details d USING (id)
         WHERE g.steam_app_id = ANY($1::int[])`,
       [owned.map((o) => o.appid)],
     ),
     db().query<{ value: string }>(`SELECT value FROM ${LIVE}.meta WHERE key = 'currency'`),
   ]);
-  const prices = new Map(rows.rows.map((r) => [r.steam_app_id, r]));
+  const library = buildLibrary(owned, new Map(rows.rows.map((r) => [r.steam_app_id, r])));
   return {
     steamId,
-    profileName: profile?.name ?? null,
-    avatar: profile?.avatar ?? null,
+    profile: profile satisfies SteamProfile,
     currency: meta.rows[0]?.value ?? "USD",
-    ...buildLibrary(owned, prices),
+    ...library,
+    insights: buildInsights(library.games),
   };
 }

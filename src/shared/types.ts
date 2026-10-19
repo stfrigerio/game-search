@@ -195,19 +195,57 @@ export interface LibraryGame {
   name: string;
   image: string | null;
   playtimeMinutes: number;
-  lastPlayed: number | null;
+  /** Minutes played in the last two weeks. */
+  recentMinutes: number;
   free: boolean;
   /** Today's best price across stores; null when unknown or delisted. */
   priceNow: number | null;
   /** List price before any discount. */
   priceFull: number | null;
   discountPct: number;
+  /** From our catalogue, when the game is in it. */
+  tags: string[];
+  releaseYear: number | null;
+  /** SteamDB-style rating 0-100 and the share of positive reviews. */
+  rating: number | null;
+  reviewPct: number | null;
+  reviewCount: number;
+  multiplayer: boolean;
+}
+
+/** Account facts from Steam; any of them can be missing (private or not returned). */
+export interface SteamProfile {
+  name: string | null;
+  avatar: string | null;
+  profileUrl: string | null;
+  country: string | null;
+  /** Unix seconds. */
+  memberSince: number | null;
+  level: number | null;
+  badges: number | null;
+  friends: number | null;
+}
+
+/** Everything the profile page charts, computed on the server from the library. */
+export interface LibraryInsights {
+  topGames: { appId: number; id: string | null; name: string; minutes: number }[];
+  /** Hours in games carrying each tag (a game's hours count for each of its top 3 tags). */
+  byTag: { tag: string; minutes: number; games: number }[];
+  byYear: { year: number; games: number; minutes: number; unplayed: number }[];
+  /** Share of all playtime in the most-played game, the next nine, and the rest. */
+  concentration: { top1: number; next9: number; rest: number };
+  recent: { appId: number; id: string | null; name: string; minutes: number }[];
+  /** Best-rated games owned but never launched. */
+  unplayedGems: { appId: number; id: string | null; name: string; rating: number; reviewPct: number; priceNow: number | null }[];
+  /** Hours-weighted share of positive reviews of what was played. */
+  avgReviewPct: number | null;
+  multiplayerMinutes: number;
+  recentMinutes: number;
 }
 
 export interface LibraryResponse {
   steamId: string;
-  profileName: string | null;
-  avatar: string | null;
+  profile: SteamProfile;
   currency: string;
   totals: {
     games: number;
@@ -220,5 +258,6 @@ export interface LibraryResponse {
     neverPlayed: number;
     neverPlayedValue: number;
   };
+  insights: LibraryInsights;
   games: LibraryGame[];
 }
