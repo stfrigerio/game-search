@@ -159,7 +159,7 @@ export function wrappedSlides(lib: LibraryResponse): Slide[] {
     eyebrow: "Your library is worth",
     big: money(totals.valueNow, currency),
     title: totals.valueFull > totals.valueNow ? `at today's prices (${money(totals.valueFull, currency)} without the sales).` : "at today's prices.",
-    lines: ["What's yours worth?"],
+    lines: [],
   });
   return slides;
 }

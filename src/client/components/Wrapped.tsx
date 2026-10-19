@@ -12,7 +12,8 @@ export function Wrapped({ data }: { data: LibraryResponse }) {
   const handle = profileHandle(data);
   const [at, setAt] = useState(0);
   const slide = slides[Math.min(at, slides.length - 1)];
-  const src = (key: string) => `/api/share/u/${encodeURIComponent(handle)}/wrapped-${key}.png`;
+  // Shown plain here; the saved or shared picture carries the site's name and link.
+  const src = (key: string, plain = false) => `/api/share/u/${encodeURIComponent(handle)}/wrapped-${key}${plain ? "-plain" : ""}.png`;
   const go = (d: number) => setAt((i) => Math.max(0, Math.min(slides.length - 1, i + d)));
 
   // Swiping: the slide follows the finger sideways and turns past a threshold. Vertical
@@ -59,7 +60,7 @@ export function Wrapped({ data }: { data: LibraryResponse }) {
   // Draw the next slide while this one is read.
   useEffect(() => {
     const next = slides[at + 1];
-    if (next) new Image().src = src(next.key);
+    if (next) new Image().src = src(next.key, true);
   }, [at, slides]);
 
   const alt = [slide.eyebrow, slide.big, slide.title, ...slide.lines].map((x) => x.replace(/[.:]$/, "")).join(". ");
@@ -85,7 +86,7 @@ export function Wrapped({ data }: { data: LibraryResponse }) {
       >
         <img
           key={slide.key}
-          src={src(slide.key)}
+          src={src(slide.key, true)}
           alt={alt}
           width={1080}
           height={1920}

@@ -179,7 +179,8 @@ async function sendPng(res: Response, key: string, draw: () => Promise<Buffer>) 
   }
 }
 
-// /api/share/u/<handle>/card.png, /story.png and /wrapped-<slide>.png
+// /api/share/u/<handle>/card.png, /story.png and /wrapped-<slide>.png (-plain: without the
+// logo and link, for showing inside the site; the saved and shared ones carry them)
 app.get(
   "/api/share/u/:handle/:file",
   route(async (req, res) => {
@@ -187,7 +188,7 @@ app.get(
     const file = String(req.params.file);
     const site = siteOf(req);
     const format = ({ "card.png": "card", "story.png": "story" } as Record<string, Format>)[file];
-    const slide = file.match(/^wrapped-([a-z]+)\.png$/)?.[1];
+    const [, slide, plain] = file.match(/^wrapped-([a-z]+)(-plain)?\.png$/) ?? [];
     if (!format && !slide) {
       res.status(404).type("text/plain").send("Not found");
       return;
@@ -198,7 +199,7 @@ app.get(
       const slides = wrappedSlides(lib);
       const i = slides.findIndex((s) => s.key === slide);
       if (i < 0) throw new LibraryError("No such slide", 404);
-      return slideImage(lib, slides[i], i, site);
+      return slideImage(lib, slides[i], i, site, !!plain);
     });
   }),
 );

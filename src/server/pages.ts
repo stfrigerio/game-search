@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { CONTENT_FILTERS } from "../shared/features.ts";
 import { gamePath } from "../shared/slug.ts";
 import type { Game } from "../shared/types.ts";
@@ -28,18 +28,20 @@ export interface PageMeta {
 export const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-let template: string | null = null;
+// Re-read when the file changes, so a new build never points at asset files that are gone.
+let template: { at: number; html: string } | null = null;
 
 /** index.html with this page's meta in place of the front page's. */
 export function renderPage(indexPath: string, meta: PageMeta): string {
-  template ??= readFileSync(indexPath, "utf8");
+  const at = statSync(indexPath).mtimeMs;
+  if (template?.at !== at) template = { at, html: readFileSync(indexPath, "utf8") };
   const e = escapeHtml;
   const setMeta = (html: string, attr: "name" | "property", key: string, value: string) => {
     const tag = `<meta ${attr}="${key}" content="${e(value)}" />`;
     const re = new RegExp(`<meta ${attr}="${key.replace(/[.:]/g, "\\$&")}" content="[^"]*"\\s*/?>`);
     return re.test(html) ? html.replace(re, () => tag) : html.replace("</head>", () => `    ${tag}\n  </head>`);
   };
-  let html = template.replace(/<title>[^<]*<\/title>/, () => `<title>${e(meta.title)}</title>`);
+  let html = template.html.replace(/<title>[^<]*<\/title>/, () => `<title>${e(meta.title)}</title>`);
   html = html.replace(/<link rel="canonical" href="[^"]*"\s*\/?>/, () => `<link rel="canonical" href="${e(meta.url)}" />`);
   html = setMeta(html, "name", "description", meta.description);
   html = setMeta(html, "property", "og:title", meta.title);

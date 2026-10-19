@@ -112,7 +112,8 @@ interface Footer {
   url: string;
 }
 
-function page(format: Format, site: string, footer: Footer, ...children: Child[]): Node {
+/** A page of the image. `footer` null draws it plain: no logo, no link (the in-app Wrapped viewer). */
+function page(format: Format, site: string, footer: Footer | null, ...children: Child[]): Node {
   const story = format === "story";
   const domain = site.replace(/^https?:\/\//, "");
   return box(
@@ -127,13 +128,12 @@ function page(format: Format, site: string, footer: Footer, ...children: Child[]
       fontFamily: "Figtree",
       color: C.ink,
     },
-    box(
-      { justifyContent: "space-between", alignItems: "center", width: "100%" },
-      text({ fontFamily: "Jersey", fontSize: story ? 64 : 40, lineHeight: 1 }, "game search"),
-      text({ fontSize: story ? 30 : 22, fontWeight: 700, color: C.inkSoft }, site.replace(/^https?:\/\//, "")),
-    ),
+    // The logo only: the address is in the footer, once.
+    footer && text({ fontFamily: "Jersey", fontSize: story ? 64 : 40, lineHeight: 1 }, "game search"),
     ...children,
-    story
+    !footer
+      ? null
+      : story
       ? // A story ends on a band across the bottom, so it reads as finished and says where to go.
         box(
           { marginTop: "auto", flexDirection: "column", gap: 10, backgroundColor: C.ink, padding: "34px 44px", boxShadow: `10px 10px 0 ${C.grape}` },
@@ -241,7 +241,7 @@ export async function profileImage(lib: LibraryResponse, format: Format, site: s
   return render(page(format, site, { cta: "What's yours worth?", url: `/u/${handle}` }, body), format);
 }
 
-export async function slideImage(lib: LibraryResponse, slide: Slide, index: number, site: string): Promise<Buffer> {
+export async function slideImage(lib: LibraryResponse, slide: Slide, index: number, site: string, plain = false): Promise<Buffer> {
   const header = slide.appId ? await picture(steamHeader(slide.appId)) : null;
   const avatar = slide.key === "intro" ? await picture(bigAvatar(lib.profile.avatar)) : null;
   const accent = C.accents[index % C.accents.length];
@@ -257,7 +257,8 @@ export async function slideImage(lib: LibraryResponse, slide: Slide, index: numb
     header ? panel({ alignSelf: "flex-start" }, img(header, 760, 355)) : null,
     ...slide.lines.map((l) => text({ fontSize: 38, fontWeight: 500, lineHeight: 1.25 }, l)),
   );
-  return render(page("story", site, { cta: "See the whole story", url: `/u/${profileHandle(lib)}/wrapped` }, body), "story");
+  const footer = plain ? null : { cta: "See the whole story", url: `/u/${profileHandle(lib)}/wrapped` };
+  return render(page("story", site, footer, body), "story");
 }
 
 export async function compareImage(cmp: CompareResponse, site: string): Promise<Buffer> {
