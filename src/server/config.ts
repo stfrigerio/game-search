@@ -6,6 +6,8 @@ export const config = {
   host: env.HOST,
   /** Pause between system-requirement requests to Steam (about 200 are allowed every five minutes). 0 turns the reading off. */
   specsPauseMs: Number(env.SPECS_PAUSE_MS ?? 1600),
+  /** Steam Web API key, for reading game libraries (Library page). Unset turns that page off. */
+  steamApiKey: env.STEAM_API_KEY ?? "",
 };
 
 export const crawlerConfig = {

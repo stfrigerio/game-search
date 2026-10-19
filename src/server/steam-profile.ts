@@ -38,3 +38,41 @@ export async function fetchWishlist(steamId: string): Promise<number[]> {
   const rank = (p: number) => p || Number.MAX_SAFE_INTEGER;
   return (res.response.items ?? []).sort((a, b) => rank(a.priority) - rank(b.priority)).map((i) => i.appid);
 }
+
+export interface OwnedGame {
+  appid: number;
+  name?: string;
+  playtime_forever: number;
+  rtime_last_played?: number;
+}
+
+/**
+ * Games on a profile, with playtime in minutes. Needs a Steam Web API key and the
+ * profile's game details set to public; returns null when they're private.
+ */
+export async function fetchOwnedGames(steamId: string, key: string): Promise<OwnedGame[] | null> {
+  const params = new URLSearchParams({
+    key,
+    steamid: steamId,
+    include_appinfo: "1",
+    include_played_free_games: "1",
+    format: "json",
+  });
+  const res = await fetchJson<{ response: { game_count?: number; games?: OwnedGame[] } }>(
+    `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?${params}`,
+    { retries: 1, timeoutMs: 20_000 },
+  );
+  // A private library comes back as an empty response, not an error.
+  return res.response.game_count === undefined ? null : (res.response.games ?? []);
+}
+
+/** Display name and avatar of a profile, if Steam returns them. */
+export async function fetchPlayerSummary(steamId: string, key: string): Promise<{ name: string; avatar: string | null } | null> {
+  const params = new URLSearchParams({ key, steamids: steamId });
+  const res = await fetchJson<{ response: { players?: { personaname?: string; avatarmedium?: string }[] } }>(
+    `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?${params}`,
+    { retries: 1, timeoutMs: 15_000 },
+  );
+  const p = res.response.players?.[0];
+  return p?.personaname ? { name: p.personaname, avatar: p.avatarmedium ?? null } : null;
+}

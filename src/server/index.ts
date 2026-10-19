@@ -7,6 +7,7 @@ import type { BestOffer } from "../shared/types.ts";
 import { config } from "./config.ts";
 import { closeDb } from "./db/pool.ts";
 import { existingIds, getGameDetail, getGames, getMeta, PAGE_SIZE, searchGames, similarGames } from "./db/search.ts";
+import { getLibrary, LibraryError } from "./library.ts";
 import { getMedia } from "./media.ts";
 import { getPrices, getPricesBatch } from "./prices.ts";
 import { readSpecsForever } from "./specs.ts";
@@ -50,6 +51,34 @@ app.post(
     const params = new URLSearchParams(typeof req.body?.params === "string" ? req.body.params : "");
     const ids = Array.isArray(req.body?.ids) ? stringIds(req.body.ids, 5000) : undefined;
     res.json(await searchGames(parseQuery(params), pageSizeOf(params.get("pageSize")), ids));
+  }),
+);
+
+// A profile's game library, priced: value today, at full price, playtime.
+app.get(
+  "/api/steam/library",
+  route(async (req, res) => {
+    if (!config.steamApiKey) {
+      res.status(501).json({ error: "Library lookups aren't set up on this server (no STEAM_API_KEY)." });
+      return;
+    }
+    let steamId: string | null;
+    try {
+      steamId = await resolveSteamId(String(req.query.profile ?? ""));
+    } catch (err) {
+      res.status(502).json({ error: `Steam didn't respond: ${String(err)}` });
+      return;
+    }
+    if (!steamId) {
+      res.status(404).json({ error: "Couldn't find that Steam profile. Paste your profile URL or SteamID64." });
+      return;
+    }
+    try {
+      res.json(await getLibrary(steamId, config.steamApiKey));
+    } catch (err) {
+      if (err instanceof LibraryError) res.status(err.status).json({ error: err.message });
+      else res.status(502).json({ error: `Steam didn't respond: ${String(err).split(config.steamApiKey).join("…")}` });
+    }
   }),
 );
 

@@ -5,6 +5,7 @@ import { api } from "./api.ts";
 import { Discover } from "./components/Discover.tsx";
 import { ActiveFilters, describeFilters, QuickFilters } from "./components/FilterChips.tsx";
 import { Filters } from "./components/Filters.tsx";
+import { Library } from "./components/Library.tsx";
 import { GameDetail } from "./components/GameDetail.tsx";
 import { ResultCard } from "./components/ResultCard.tsx";
 import { SteamImport } from "./components/SteamImport.tsx";
@@ -12,12 +13,14 @@ import { formatCount, STORE_NAMES } from "./format.ts";
 import { BUDDY, BUDDY_BLINK, Pixel, SLIME, SLIME_BLINK } from "./pixel.tsx";
 import { useSavedList } from "./savedList.ts";
 
-type View = "discover" | "search" | "list";
+type View = "discover" | "search" | "list" | "library";
 
 interface UrlState {
   view: View;
   query: SearchQuery;
   gameId: string | null;
+  /** Steam profile shown on the Library page. */
+  profile?: string;
 }
 
 /** All state lives in the URL so any search can be bookmarked or shared. */
@@ -25,14 +28,18 @@ function readUrl(): UrlState {
   const params = new URLSearchParams(location.search);
   const query = parseQuery(params);
   const isDefault = serializeQuery(query).size === 0;
+  if (params.get("view") === "library") {
+    return { view: "library", query, gameId: params.get("game"), profile: params.get("profile") ?? "" };
+  }
   const view: View = params.get("view") === "list" ? "list" : isDefault ? "discover" : "search";
   // Wishlists are full of unreleased games, so the list shows them unless told otherwise.
   if (view === "list" && !params.has("upcoming")) query.upcoming = "include";
   return { view, query, gameId: params.get("game") };
 }
 
-function urlFor({ view, query, gameId }: UrlState): string {
-  const params = serializeQuery(query);
+function urlFor({ view, query, gameId, profile }: UrlState): string {
+  const params = view === "library" ? new URLSearchParams({ view: "library" }) : serializeQuery(query);
+  if (view === "library" && profile) params.set("profile", profile);
   if (view === "list") params.set("view", "list");
   if (gameId) params.set("game", gameId);
   return `${location.pathname}${params.size ? `?${params}` : ""}`;
@@ -124,7 +131,7 @@ export function App() {
   const ready = !!meta?.gameCount;
   const listKey = view === "list" ? list.ids.join(",") : "";
   useEffect(() => {
-    if (!ready || view === "discover") return;
+    if (!ready || view === "discover" || view === "library") return;
     const ctrl = new AbortController();
     setLoading(true);
     api.search(query, { signal: ctrl.signal, ids: view === "list" ? list.ids : undefined }).then(
@@ -242,6 +249,12 @@ export function App() {
           <button className={view === "list" ? "active" : ""} onClick={() => goList()}>
             My list{list.ids.length ? <span className="tab-count">{list.ids.length}</span> : null}
           </button>
+          <button
+            className={view === "library" ? "active" : ""}
+            onClick={() => navigate({ view: "library", query: DEFAULT_QUERY, gameId: null, profile: state.profile ?? "" })}
+          >
+            Library
+          </button>
         </nav>
       </header>
 
@@ -276,7 +289,17 @@ export function App() {
         </div>
       )}
 
-      {ready && view !== "discover" && (
+      {ready && view === "library" && (
+        <div className="layout single">
+          <Library
+            initialProfile={state.profile ?? ""}
+            onProfile={(profile) => navigate({ view: "library", query: DEFAULT_QUERY, gameId: null, profile }, false)}
+            onOpen={openGame}
+          />
+        </div>
+      )}
+
+      {ready && (view === "search" || view === "list") && (
         <div className="layout">
           <div className={`filters-wrap ${showFilters ? "open" : ""}`}>
             <Filters

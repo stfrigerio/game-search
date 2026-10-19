@@ -372,6 +372,44 @@ footer p { margin: 0 0 .2rem; max-width: 80ch; }
 }
 .modal .close:hover { background: var(--ink); }
 .modal .hero { display: block; float: left; width: min(460px, 52%); padding: 0; margin: 0 1.5rem 1rem 0; aspect-ratio: 460 / 215; object-fit: cover; border: var(--u) solid var(--ink); background: var(--sky-soft); }
+/* Library: what a Steam library is worth */
+.library { max-width: 1040px; margin: 0 auto; width: 100%; }
+.lib-head { display: flex; align-items: center; gap: 1rem; margin: .4rem var(--u) 1rem; }
+.lib-head h2 { font-family: var(--poster); font-size: clamp(2.4rem, 6vw, 3.8rem); line-height: .85; overflow-wrap: anywhere; }
+.lib-avatar { width: 64px; height: 64px; box-shadow: var(--frame); image-rendering: auto; }
+.lib-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1.1rem; margin: 0 var(--u) 1.6rem; }
+.lib-tile { display: grid; gap: .25rem; padding: .9rem 1rem; background: var(--card); box-shadow: var(--frame), var(--drop); }
+.lib-tile-label { font: 400 1.3rem/1 var(--display); color: var(--ink-soft); }
+.lib-tile strong { font: 400 clamp(2rem, 4vw, 2.6rem)/1 var(--display); }
+.lib-tile.shame { background: var(--pink-soft); }
+.library .results-bar { flex-wrap: wrap; gap: .8rem 1rem; }
+.library .results-bar input[type="search"] { flex: 1 1 220px; }
+.library .results-bar select { width: auto; }
+.lib-list { list-style: none; margin: 0 var(--u); padding: 0; background: var(--card); box-shadow: var(--frame); }
+.lib-row { display: grid; grid-template-columns: minmax(0, 1fr) 7.5rem 8.5rem 6.5rem; align-items: center; gap: .8rem; padding: .35rem .7rem; border-bottom: 2px dashed var(--line); }
+.lib-row:last-child { border-bottom: 0; }
+.lib-header { padding-top: .6rem; padding-bottom: .4rem; }
+.lib-header span:not(:first-child) { text-align: right; }
+.library .steam-import .primary { white-space: nowrap; }
+.lib-open { display: flex; align-items: center; gap: .8rem; min-width: 0; padding: 0; background: none; text-align: left; color: var(--ink); }
+.lib-open:not(:disabled):hover .lib-name { background: var(--yellow); }
+.lib-open:disabled { cursor: default; }
+.lib-thumb { flex: none; width: 92px; aspect-ratio: 460 / 215; background: var(--sky-soft); box-shadow: var(--thin); overflow: hidden; }
+.lib-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.lib-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.not-listed .lib-name { color: var(--ink-soft); font-weight: 400; }
+.lib-hours, .lib-price, .lib-per-hour { text-align: right; white-space: nowrap; }
+.lib-hours.unplayed { color: var(--red-deep); }
+.lib-price s { margin-right: .3rem; }
+@media (max-width: 760px) {
+  .lib-row { grid-template-columns: minmax(0, 1fr) auto; gap: .2rem .8rem; }
+  .lib-header { display: none; }
+  .lib-open { grid-column: 1 / -1; }
+  .lib-thumb { width: 72px; }
+  .lib-hours { text-align: left; }
+  .lib-per-hour { grid-column: 1 / -1; text-align: left; }
+}
+
 /* Screenshots and trailers: the files come straight from the store's CDN. */
 .media-gallery { clear: both; margin: 1.2rem 0 .4rem; outline: none; }
 .media-gallery.loading { aspect-ratio: 16 / 9; background: var(--sky-soft); box-shadow: var(--frame); opacity: .5; }

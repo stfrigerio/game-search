@@ -186,3 +186,39 @@ export interface MediaResponse {
   items: MediaItem[];
   error: string | null;
 }
+
+/** One game in a Steam library, priced from our catalogue. Prices in cents. */
+export interface LibraryGame {
+  appId: number;
+  /** Our catalogue id, when the game is in it (delisted games and tools aren't). */
+  id: string | null;
+  name: string;
+  image: string | null;
+  playtimeMinutes: number;
+  lastPlayed: number | null;
+  free: boolean;
+  /** Today's best price across stores; null when unknown or delisted. */
+  priceNow: number | null;
+  /** List price before any discount. */
+  priceFull: number | null;
+  discountPct: number;
+}
+
+export interface LibraryResponse {
+  steamId: string;
+  profileName: string | null;
+  avatar: string | null;
+  currency: string;
+  totals: {
+    games: number;
+    /** Games we have a price for (paid or free). */
+    priced: number;
+    free: number;
+    valueNow: number;
+    valueFull: number;
+    playtimeMinutes: number;
+    neverPlayed: number;
+    neverPlayedValue: number;
+  };
+  games: LibraryGame[];
+}
