@@ -1,7 +1,8 @@
 import { readFileSync, statSync } from "node:fs";
-import { CONTENT_FILTERS } from "../shared/features.ts";
+import { CONTENT_FILTERS, FEATURE_BY_KEY, playerModes } from "../shared/features.ts";
+import { POWER_BY_LEVEL } from "../shared/power.ts";
 import { gamePath } from "../shared/slug.ts";
-import type { Game } from "../shared/types.ts";
+import type { GameDetailResponse, GameSummary, PricesResponse } from "../shared/types.ts";
 import { db } from "./db/pool.ts";
 import { LIVE } from "./db/schema.ts";
 
@@ -60,26 +61,114 @@ export function renderPage(indexPath: string, meta: PageMeta): string {
   return html;
 }
 
+const money = (cents: number, currency: string) =>
+  cents === 0 ? "Free" : new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
+const count = (n: number) => new Intl.NumberFormat("en-US").format(n);
+const DECK = ["", "Unsupported on Steam Deck", "Playable on Steam Deck", "Verified for Steam Deck"];
+const STORE = { steam: "Steam", gog: "GOG" };
+
+/** What the server knows about a game for its page; prices are the ones looked up recently, if any. */
+export interface GamePageData {
+  detail: GameDetailResponse;
+  similar: GameSummary[];
+  prices: PricesResponse | null;
+  /** The currency of the store listings. */
+  currency: string;
+}
+
 /** Head and body for a game's own page. */
-export function gamePage(game: Game, site: string): PageMeta {
+export function gamePage({ detail, similar, prices, currency }: GamePageData, site: string): PageMeta {
+  const { game, summary, specs, features } = detail;
+  const e = escapeHtml;
+  const name = e(game.name);
   const url = `${site}${gamePath(game.id, game.name)}`;
-  const reviews = [...game.stores].sort((a, b) => b.reviewCount - a.reviewCount)[0];
   const year = game.releaseDate ? new Date(game.releaseDate * 1000).getUTCFullYear() : null;
-  const description =
+  const by = game.developers.length ? ` by ${game.developers.join(", ")}` : "";
+  const reviews = summary.reviewCount >= 10 ? `${summary.reviewPct}% of ${count(summary.reviewCount)} reviews positive` : null;
+  const power = POWER_BY_LEVEL.get(summary.power);
+  const description = (
     game.description ||
-    `${game.name}${year ? ` (${year})` : ""}${game.developers.length ? ` by ${game.developers.join(", ")}` : ""}. Compare prices across Steam, GOG and key shops.`;
+    `${game.name}${year ? ` (${year})` : ""}${by}.${reviews ? ` ${reviews}.` : ""} Compare prices across Steam, GOG and key shops.`
+  ).slice(0, 300);
+
+  // Live official-store offers when someone asked for them lately, else the stores' own listings.
+  const official = prices?.offers.filter((o) => o.kind === "official") ?? [];
+  const offers = official.length
+    ? official.map((o) => ({ shop: o.shop, price: o.price, base: o.basePrice, pct: o.discountPct, url: o.url, currency: prices!.currency }))
+    : game.stores
+        .filter((s) => s.price !== null)
+        .map((s) => ({ shop: STORE[s.store], price: s.price!, base: s.basePrice ?? s.price!, pct: s.discountPct, url: s.url, currency }));
+  offers.sort((a, b) => a.price - b.price);
+  const cheapest = offers[0];
+
+  const facts = [
+    year ? `Released ${year}${by}` : game.comingSoon ? `Coming soon${by}` : null,
+    reviews,
+    game.tags.length ? `Tags: ${game.tags.slice(0, 10).join(", ")}` : null,
+    game.peakPlayers ? `${count(game.peakPlayers)} players at yesterday's peak` : null,
+    [game.platforms.windows && "Windows", game.platforms.mac && "macOS", game.platforms.linux && "Linux"].filter(Boolean).join(", ") || null,
+    DECK[game.deck] || null,
+  ].filter((f): f is string => !!f);
+
+  const { modes } = playerModes(game.categories);
+  const featureLabels = features.flatMap((k): string[] => {
+    const label = FEATURE_BY_KEY.get(k)?.label;
+    return label && !modes.includes(label) ? [label] : [];
+  });
+
+  const pc = [
+    power ? `<p>${name} is ${power.label.toLowerCase()} to run: ${e(power.hint.toLowerCase())}.</p>` : "",
+    specs
+      ? "<ul>" +
+        [
+          specs.gpuText && `Minimum graphics: ${specs.gpuText}`,
+          specs.recGpuText && `Recommended graphics: ${specs.recGpuText}`,
+          specs.ram !== null && `Memory: ${specs.ram} GB`,
+          specs.disk !== null && `Disk space: ${specs.disk} GB`,
+        ]
+          .filter((l): l is string => !!l)
+          .map((l) => `<li>${e(l)}</li>`)
+          .join("") +
+        "</ul>"
+      : "",
+  ].join("");
+
+  const body =
+    `<main><h1>${name}</h1>` +
+    `<p>${e(description)}</p>` +
+    `<ul>${facts.map((f) => `<li>${e(f)}</li>`).join("")}</ul>` +
+    (offers.length
+      ? `<h2>Where to buy ${name} cheapest</h2><ul>` +
+        offers
+          .map(
+            (o) =>
+              `<li><a href="${e(o.url)}" rel="nofollow">${e(o.shop)}</a>: ${money(o.price, o.currency)}` +
+              (o.pct > 0 ? ` (${o.pct}% off ${money(o.base, o.currency)})` : "") +
+              "</li>",
+          )
+          .join("") +
+        "</ul>" +
+        (prices?.historicLow != null ? `<p>Historic low: ${money(prices.historicLow, prices.currency)}</p>` : "")
+      : "") +
+    (pc ? `<h2>Can my PC run ${name}?</h2>${pc}` : "") +
+    (modes.length ? `<h2>Players</h2><p>${e(modes.join(", "))}</p>` : "") +
+    (featureLabels.length ? `<h2>Features</h2><p>${e(featureLabels.join(", "))}</p>` : "") +
+    (similar.length
+      ? `<h2>Games like ${name}</h2><ul>` +
+        similar.map((s) => `<li><a href="${e(gamePath(s.id, s.name))}">${e(s.name)}</a></li>`).join("") +
+        "</ul>"
+      : "") +
+    `<p><a href="/">Search Steam and GOG games</a></p></main>`;
+
+  const os = [game.platforms.windows && "Windows", game.platforms.mac && "macOS", game.platforms.linux && "Linux"].filter(Boolean);
   return {
     title: `${game.name}: price, reviews and where to buy cheapest · Game Search`,
-    description: description.slice(0, 300),
+    description,
     url,
     image: game.image ?? `${site}/og.png`,
     imageWidth: game.image ? 460 : 1200,
     imageHeight: game.image ? 215 : 630,
-    body:
-      `<main><h1>${escapeHtml(game.name)}</h1>` +
-      `<p>${escapeHtml(description)}</p>` +
-      (game.tags.length ? `<p>${escapeHtml(game.tags.slice(0, 10).join(", "))}</p>` : "") +
-      `<p><a href="/">Search ${escapeHtml("Steam and GOG")} games</a></p></main>`,
+    body,
     jsonLd: {
       "@context": "https://schema.org",
       "@type": "VideoGame",
@@ -91,8 +180,21 @@ export function gamePage(game: Game, site: string): PageMeta {
       ...(game.developers.length ? { author: game.developers.map((name) => ({ "@type": "Organization", name })) } : {}),
       ...(game.tags.length ? { genre: game.tags.slice(0, 5) } : {}),
       gamePlatform: "PC",
-      ...(reviews && reviews.reviewCount >= 10
-        ? { aggregateRating: { "@type": "AggregateRating", ratingValue: reviews.reviewPct, bestRating: 100, worstRating: 0, ratingCount: reviews.reviewCount } }
+      applicationCategory: "GameApplication",
+      ...(os.length ? { operatingSystem: os.join(", ") } : {}),
+      ...(summary.reviewCount >= 10
+        ? { aggregateRating: { "@type": "AggregateRating", ratingValue: summary.reviewPct, bestRating: 100, worstRating: 0, ratingCount: summary.reviewCount } }
+        : {}),
+      ...(cheapest
+        ? {
+            offers: {
+              "@type": "AggregateOffer",
+              lowPrice: (cheapest.price / 100).toFixed(2),
+              highPrice: (offers[offers.length - 1].price / 100).toFixed(2),
+              priceCurrency: cheapest.currency,
+              offerCount: offers.length,
+            },
+          }
         : {}),
     },
   };

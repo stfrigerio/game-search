@@ -4,11 +4,13 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildCompare } from "../src/server/compare.ts";
 import { buildInsights, buildLibrary, type CatalogRow } from "../src/server/library.ts";
-import { renderPage } from "../src/server/pages.ts";
+import { summarize } from "../src/server/derive.ts";
+import { gamePage, renderPage } from "../src/server/pages.ts";
 import type { OwnedGame } from "../src/server/steam-profile.ts";
 import { gameIdFromSlug, gamePath } from "../src/shared/slug.ts";
 import type { LibraryResponse } from "../src/shared/types.ts";
 import { persona, profileHandle, wrappedSlides } from "../src/shared/wrapped.ts";
+import { game } from "./fixtures.ts";
 
 const ONLINE_COOP = 1 << 3; // FEATURES[3] is "onlineCoop"
 
@@ -166,5 +168,43 @@ describe("renderPage", () => {
     expect(html).toContain('<meta property="og:image" content="https://img/1.jpg" />');
     expect(html).toContain('<div id="root"><h1>Hi</h1></div>');
     expect(html).not.toContain("</script><script>alert");
+  });
+});
+
+describe("gamePage", () => {
+  const hades = game("Hades <II>", { tags: ["Roguelike", "Action"], reviews: [5000, 96], price: 1499, discount: 40, year: 2020, dev: "Supergiant", categories: [2, 22], players: 30000 });
+  const detail = { game: hades, summary: { ...summarize(hades), power: 2 as const, powerKnown: true }, features: ["single", "achievements"], languages: [], specs: null };
+  const similar = [summarize(game("Dead Cells"))];
+
+  it("writes what a searcher wants to know as crawlable text, with links to similar games", () => {
+    const { body, jsonLd } = gamePage({ detail, similar, prices: null, currency: "USD" }, "https://x");
+    expect(body).toContain("<h1>Hades &lt;II&gt;</h1>");
+    expect(body).toContain("Where to buy Hades &lt;II&gt; cheapest");
+    expect(body).toContain("$14.99 (40% off $24.98)");
+    expect(body).toContain("Can my PC run Hades &lt;II&gt;?");
+    expect(body).toContain("96% of 5,000 reviews positive");
+    expect(body).toContain("30,000 players");
+    expect(body).toContain("Achievements");
+    expect(body).toMatch(/<a href="\/game\/steam-\d+-dead-cells">Dead Cells<\/a>/);
+    expect(jsonLd).toMatchObject({ offers: { lowPrice: "14.99", priceCurrency: "USD", offerCount: 1 } });
+  });
+
+  it("prefers recently looked-up shop prices and shows the historic low", () => {
+    const prices = {
+      currency: "USD",
+      offers: [
+        { shop: "Fanatical", price: 999, basePrice: 2499, discountPct: 60, url: "https://f", kind: "official" as const },
+        { shop: "G2A", price: 500, basePrice: 500, discountPct: 0, url: "https://g", kind: "keyshop" as const },
+      ],
+      links: [],
+      historicLow: 799,
+      error: null,
+    };
+    const { body, jsonLd } = gamePage({ detail, similar: [], prices, currency: "USD" }, "https://x");
+    expect(body).toContain("Fanatical</a>: $9.99");
+    expect(body).not.toContain("G2A");
+    expect(body).toContain("Historic low: $7.99");
+    expect(body).not.toContain("Games like");
+    expect(jsonLd).toMatchObject({ offers: { lowPrice: "9.99" } });
   });
 });

@@ -13,7 +13,7 @@ import { gamePage, renderPage, sitemapGames, sitemapIndex, sitemapPages, type Pa
 import { compareImage, profileImage, slideImage, type Format } from "./share-image.ts";
 import { getMedia } from "./media.ts";
 import { DESTINATIONS, isDestination, steamLoginUrl, verifySteamLogin } from "./steam-openid.ts";
-import { getPrices, getPricesBatch } from "./prices.ts";
+import { getPrices, getPricesBatch, recentPrices } from "./prices.ts";
 import { readSpecsForever } from "./specs.ts";
 import { fetchFriends, fetchWishlist, resolveSteamId } from "./steam-profile.ts";
 import { gameIdFromSlug } from "../shared/slug.ts";
@@ -363,12 +363,14 @@ if (existsSync(dist)) {
     "/game/:slug",
     route(async (req, res) => {
       const id = gameIdFromSlug(String(req.params.slug));
-      const [game] = id ? await getGames([id]) : [];
-      if (!game) {
+      const detail = id ? await getGameDetail(id) : null;
+      if (!detail) {
         res.status(404).type("text/plain").send("Not found");
         return;
       }
-      page(res, gamePage(game, siteOf(req)));
+      // Crawlers walk every game page, so they get prices only if a person looked them up lately.
+      const [similar, prices, meta] = await Promise.all([similarGames(detail.game.id, 10), recentPrices(detail.game.id), getMeta()]);
+      page(res, gamePage({ detail, similar, prices, currency: meta.currency }, siteOf(req)));
     }),
   );
 

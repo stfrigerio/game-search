@@ -128,6 +128,14 @@ function cached(id: string): Promise<PricesResponse> | null {
   return hit && Date.now() - hit.at < CACHE_MS ? hit.value : null;
 }
 
+/** Prices someone looked up in the last few minutes, without asking CheapShark; null otherwise. */
+export async function recentPrices(id: string): Promise<PricesResponse | null> {
+  const hit = cache.get(id);
+  if (!hit || Date.now() - hit.at >= CACHE_MS) return null;
+  const done = await Promise.race([hit.value, Promise.resolve(null)]);
+  return done && !done.error ? done : null;
+}
+
 export function getPrices(game: Game): Promise<PricesResponse> {
   return cached(game.id) ?? remember(game.id, fetchPrices(game));
 }

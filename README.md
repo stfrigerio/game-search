@@ -71,6 +71,9 @@ across official stores and key resellers (G2A, Kinguin, Eneba, Instant Gaming, â
   resvg (`src/server/share-image.ts`), using the WOFF fonts in `public/fonts`.
 - **Game pages**: `/game/steam-620-portal-2` opens a game directly, with its own title,
   description, image and structured data for search engines; `/sitemap.xml` lists them.
+  Crawlers also get the page as text: prices by store (and the historic low, when someone
+  looked it up in the last 15 minutes, so crawling never calls CheapShark), how strong a PC it
+  needs, Steam Deck support, player modes, features and links to ten similar games.
 - Every search is in the URL, so you can bookmark or share it.
 
 ## Analytics
