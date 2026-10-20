@@ -111,9 +111,10 @@ export function gamePage({ detail, similar, prices, currency }: GamePageData, si
   ].filter((f): f is string => !!f);
 
   const { modes } = playerModes(game.categories);
+  // Player features are already listed as Steam words them under "Players".
   const featureLabels = features.flatMap((k): string[] => {
-    const label = FEATURE_BY_KEY.get(k)?.label;
-    return label && !modes.includes(label) ? [label] : [];
+    const f = FEATURE_BY_KEY.get(k);
+    return f && f.group !== "players" ? [f.label] : [];
   });
 
   const pc = [
