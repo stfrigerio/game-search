@@ -73,6 +73,24 @@ across official stores and key resellers (G2A, Kinguin, Eneba, Instant Gaming, â
   description, image and structured data for search engines; `/sitemap.xml` lists them.
 - Every search is in the URL, so you can bookmark or share it.
 
+## Analytics
+
+Page views and a few product events go to umami (no cookies; only on the public address).
+The events, from `src/client/track.ts`, carry no Steam IDs or names:
+
+| Event | When | Data |
+| --- | --- | --- |
+| `signin-click` | "Sign in with Steam" pressed | `next` (library / list) |
+| `signed-in` | back from Steam with a verified id | |
+| `library-view` | a library loaded | `source`: `signin`, `own` or `link` (opened someone's shared link), `games` |
+| `share` | a link shared | `what` (profile / wrapped / compare / game), `how` (sheet / copy) |
+| `save-image` | a picture saved or shared | `what`, `how` (sheet / download) |
+| `wrapped-open`, `wrapped-finish` | Wrapped opened, last slide reached | |
+| `compare-pick`, `compare-view` | someone picked, comparison shown | `from` (friends / pasted); `common`, `together` |
+
+Whether sharing grows the site: of the visits with `library-view` source `link`, how many go
+on to `signin-click`.
+
 ## Running it
 
 Needs Node 20+ and PostgreSQL 13+ with the `pg_trgm` extension (part of the standard

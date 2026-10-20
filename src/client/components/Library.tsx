@@ -7,6 +7,7 @@ import { ChartCard, Columns, HBars, TierBar } from "./Charts.tsx";
 import { Compare } from "./Compare.tsx";
 import { ShareButton } from "./ShareButton.tsx";
 import { Wrapped } from "./Wrapped.tsx";
+import { track } from "../track.ts";
 import { signInFailed, SteamSignIn } from "./SteamSignIn.tsx";
 
 const PROFILE_KEY = "game-search:steam-profile";
@@ -148,6 +149,10 @@ export function Library({
         // Back from "Sign in with Steam": this one is the visitor's own.
         const params = new URLSearchParams(location.search);
         // A profile typed into the form is kept by its short handle, so it's recognised on its short link.
+        const own = params.has("me") || mine.trim() === profile.trim() || [profileHandle(d), d.steamId].includes(mine.trim());
+        if (params.has("me")) track("signed-in");
+        // "link" is the one that matters for growth: someone opened a profile another person shared.
+        track("library-view", { source: params.has("me") ? "signin" : own ? "own" : "link", games: d.totals.games });
         if (params.has("me") || mine.trim() === profile.trim()) remember(profileHandle(d));
         setShowForm(false);
         if (params.has("me")) {
@@ -247,6 +252,7 @@ export function Library({
           <ProfileHeader data={data} />
           <div className="share-row">
             <ShareButton
+              what="profile"
               url={`/u/${encodeURIComponent(handle)}`}
               title={profileBlurb(data).title}
               text="What's your Steam library worth?"

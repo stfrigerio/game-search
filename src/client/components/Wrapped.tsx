@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryResponse } from "../../shared/types.ts";
 import { profileHandle, wrappedSlides } from "../../shared/wrapped.ts";
 import { ShareButton } from "./ShareButton.tsx";
+import { track } from "../track.ts";
 
 /**
  * The library as a story: one picture per slide, drawn by the server so each one
@@ -57,6 +58,11 @@ export function Wrapped({ data }: { data: LibraryResponse }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [slides.length]);
 
+  useEffect(() => track("wrapped-open"), []);
+  useEffect(() => {
+    if (at === slides.length - 1 && at > 0) track("wrapped-finish");
+  }, [at, slides.length]);
+
   // Draw the next slide while this one is read.
   useEffect(() => {
     const next = slides[at + 1];
@@ -101,6 +107,7 @@ export function Wrapped({ data }: { data: LibraryResponse }) {
       </p>
       <div className="wrapped-actions">
         <ShareButton
+          what="wrapped"
           url={`/u/${encodeURIComponent(handle)}/wrapped`}
           title={`${data.profile.name ?? "My"} Steam library, wrapped`}
           text={slide.key === "persona" ? `I'm ${slide.big}. What are you?` : "My Steam library, wrapped."}

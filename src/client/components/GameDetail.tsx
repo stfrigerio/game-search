@@ -71,7 +71,7 @@ export function GameDetail({ id, currency, onClose, onTag, onOpen, onDev }: Prop
               <h2>{game.name}</h2>
               <span className="detail-actions">
                 <SaveButton id={game.id} large />
-                <ShareButton url={gamePath(game.id, game.name)} title={game.name} text={`${game.name}: prices across every store`} />
+                <ShareButton what="game" url={gamePath(game.id, game.name)} title={game.name} text={`${game.name}: prices across every store`} />
               </span>
             </div>
             <p className="detail-facts muted">

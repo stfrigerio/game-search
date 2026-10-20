@@ -5,6 +5,7 @@ import { api } from "../api.ts";
 import { formatCount, formatPrice } from "../format.ts";
 import { ChartCard, SERIES } from "./Charts.tsx";
 import { ShareButton } from "./ShareButton.tsx";
+import { track } from "../track.ts";
 
 const hours = (m: number) => (m === 0 ? "0 h" : m < 60 ? `${m} min` : `${formatCount(Math.round(m / 60))} h`);
 const steamHeader = (appId: number) => `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`;
@@ -45,7 +46,12 @@ function FriendPicker({ profile, onPick }: { profile: string; onPick: (handle: s
           <ul className="friends">
             {shown.map((f) => (
               <li key={f.steamId}>
-                <button onClick={() => onPick(f.steamId)}>
+                <button
+                  onClick={() => {
+                    track("compare-pick", { from: "friends" });
+                    onPick(f.steamId);
+                  }}
+                >
                   {f.avatar ? <img src={f.avatar} alt="" loading="lazy" /> : <span className="friend-blank" />}
                   <span>{f.name}</span>
                 </button>
@@ -61,7 +67,9 @@ function FriendPicker({ profile, onPick }: { profile: string; onPick: (handle: s
         className="compare-other"
         onSubmit={(e) => {
           e.preventDefault();
-          if (other.trim()) onPick(other.trim());
+          if (!other.trim()) return;
+          track("compare-pick", { from: "pasted" });
+          onPick(other.trim());
         }}
       >
         <input
@@ -163,7 +171,11 @@ export function Compare({
     setCmp(null);
     setError(null);
     let live = true;
-    api.compare(me, vs).then((c) => live && setCmp(c), (e) => live && setError(String(e.message ?? e)));
+    api.compare(me, vs).then((c) => {
+      if (!live) return;
+      setCmp(c);
+      track("compare-view", { common: c.common, together: c.together.length });
+    }, (e) => live && setError(String(e.message ?? e)));
     return () => {
       live = false;
     };
@@ -253,6 +265,7 @@ export function Compare({
         </p>
         <div className="share-row">
           <ShareButton
+            what="compare"
             url={`/u/${encodeURIComponent(a.handle)}/vs/${encodeURIComponent(b.handle)}`}
             title={`${nameA} vs ${nameB} on Steam`}
             text={`${Math.round(cmp.tasteMatch * 100)}% taste match, ${cmp.common} games in common.`}

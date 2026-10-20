@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { track } from "../track.ts";
 
 /**
  * Share a link: the phone's share sheet where there is one, else copy it. With an
@@ -12,6 +13,7 @@ export function ShareButton({
   image,
   imageName = "game-search.png",
   label = "Share",
+  what,
 }: {
   url: string;
   title: string;
@@ -20,6 +22,8 @@ export function ShareButton({
   image?: string;
   imageName?: string;
   label?: string;
+  /** For analytics: which kind of page is being shared. */
+  what: "profile" | "wrapped" | "compare" | "game";
 }) {
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -33,6 +37,7 @@ export function ShareButton({
     if (navigator.share) {
       try {
         await navigator.share({ url: full, title, text });
+        track("share", { what, how: "sheet" });
         return;
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
@@ -40,6 +45,7 @@ export function ShareButton({
     }
     try {
       await navigator.clipboard.writeText(full);
+      track("share", { what, how: "copy" });
       flash("Link copied");
     } catch {
       prompt("Copy this link:", full);
@@ -58,6 +64,7 @@ export function ShareButton({
       if (navigator.canShare?.({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title, text: `${text ?? title} ${new URL(url, location.origin).href}` });
+          track("save-image", { what, how: "sheet" });
           return;
         } catch (e) {
           if ((e as Error).name === "AbortError") return;
@@ -69,6 +76,7 @@ export function ShareButton({
       a.download = imageName;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+      track("save-image", { what, how: "download" });
       flash("Image saved");
     } catch {
       flash("Couldn't make the image, try again");
