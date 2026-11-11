@@ -1,5 +1,9 @@
 # Game Search
 
+[![Game Search: find a game worth your evening](public/og.png)](https://gamesearch.manong.app)
+
+**Live at [gamesearch.manong.app](https://gamesearch.manong.app)**
+
 A faster, more useful search across PC game stores than the one built into Steam.
 It merges ~195k games from **Steam** and **GOG** into one index and compares prices
 across official stores and key resellers (G2A, Kinguin, Eneba, Instant Gaming, …).
@@ -246,3 +250,7 @@ TEST_DATABASE_URL=postgres://game_search:<pw>@localhost/game_search_test npm tes
 
 Database tests wipe and reload the catalogue in `TEST_DATABASE_URL`, so point it at a
 separate database. Without it they're skipped; CI runs them against a Postgres service.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
